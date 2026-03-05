@@ -14,6 +14,7 @@ import type { SiteRecord } from "@/lib/types"
 interface GenerationStatusProps {
   site: SiteRecord
   onReset: () => void
+  hideResetButton?: boolean
 }
 
 const WORKFLOW_STEPS = [
@@ -39,7 +40,7 @@ function getStepState(
   return "pending"
 }
 
-export function GenerationStatus({ site, onReset }: GenerationStatusProps) {
+export function GenerationStatus({ site, onReset, hideResetButton }: GenerationStatusProps) {
   const isComplete = site.status === "complete"
   const isError = site.status === "error"
   const siteUrl = site.domain
@@ -62,7 +63,7 @@ export function GenerationStatus({ site, onReset }: GenerationStatusProps) {
             {site.name}
           </p>
         </div>
-        {(isComplete || isError) && (
+        {(isComplete || isError) && !hideResetButton && (
           <Button variant="outline" size="sm" onClick={onReset}>
             <RotateCcw className="mr-2 h-3.5 w-3.5" />
             New Site

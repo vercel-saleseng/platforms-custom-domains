@@ -1,4 +1,5 @@
 export type SiteStatus =
+  | "draft"
   | "queued"
   | "analyzing"
   | "prompting"
@@ -32,6 +33,7 @@ export interface SiteRecord {
 }
 
 export const STEP_LABELS: Record<number, string> = {
+  [-1]: "Draft",
   0: "Queued",
   1: "Analyzing images...",
   2: "Crafting generation prompt...",

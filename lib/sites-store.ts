@@ -1,7 +1,34 @@
 import { sql } from "./db"
 import { type SiteRecord, type SiteStatus, STEP_LABELS } from "./types"
 
-// Create a new site record in the database
+// Create a new draft site (no prompt/images yet)
+export async function createDraftSite(
+  id: string,
+  name?: string
+): Promise<SiteRecord> {
+  const siteName = name || `Untitled Site`
+  const now = new Date().toISOString()
+  
+  await sql`
+    INSERT INTO sites (id, name, prompt, image_urls, status, current_step, created_at, updated_at)
+    VALUES (${id}, ${siteName}, '', '{}', 'draft', -1, ${now}, ${now})
+  `
+  
+  return {
+    id,
+    name: siteName,
+    prompt: "",
+    imageUrls: [],
+    status: "draft",
+    currentStep: -1,
+    totalSteps: 6,
+    stepLabel: STEP_LABELS[-1],
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+// Create a new site record in the database (for backward compatibility)
 export async function createSite(
   id: string,
   prompt: string,
@@ -57,6 +84,8 @@ export async function updateSite(
     UPDATE sites 
     SET 
       name = ${updates.name ?? site.name},
+      prompt = ${updates.prompt ?? site.prompt},
+      image_urls = ${updates.imageUrls ?? site.imageUrls},
       status = ${updates.status ?? site.status},
       current_step = ${updates.currentStep ?? site.currentStep},
       error = ${updates.error ?? site.error ?? null},

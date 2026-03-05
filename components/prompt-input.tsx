@@ -8,6 +8,7 @@ interface PromptInputProps {
   onSubmit: (prompt: string) => void
   disabled?: boolean
   hasImages: boolean
+  initialValue?: string
 }
 
 const EXAMPLE_PROMPTS = [
@@ -21,8 +22,9 @@ export function PromptInput({
   onSubmit,
   disabled,
   hasImages,
+  initialValue = "",
 }: PromptInputProps) {
-  const [prompt, setPrompt] = useState("")
+  const [prompt, setPrompt] = useState(initialValue)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {

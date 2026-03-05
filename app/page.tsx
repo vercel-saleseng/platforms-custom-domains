@@ -1,25 +1,22 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Sparkles } from "lucide-react"
+import { Menu, Sparkles, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
-import { ImageUploader } from "@/components/image-uploader"
-import { PromptInput } from "@/components/prompt-input"
-import { GenerationStatus } from "@/components/generation-status"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SiteRecord } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function Home() {
+  const router = useRouter()
   const isMobile = useIsMobile()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [images, setImages] = useState<string[]>([])
-  const [activeSiteId, setActiveSiteId] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
 
   // On desktop, default sidebar open
   useEffect(() => {
@@ -36,88 +33,35 @@ export default function Home() {
   )
   const sites = sitesData?.sites || []
 
-  // Fetch active site details (polls every 3s when not complete)
-  const { data: activeSiteData } = useSWR<{ site: SiteRecord }>(
-    activeSiteId ? `/api/sites/${activeSiteId}` : null,
-    fetcher,
-    {
-      refreshInterval: (data) => {
-        const status = data?.site?.status
-        if (status === "complete" || status === "error") return 0
-        return 3000
-      },
-    }
-  )
-  const activeSite = activeSiteData?.site
-
-  // Auto-select newly created site
-  const prevSitesLength = useRef(sites.length)
-  useEffect(() => {
-    if (sites.length > prevSitesLength.current && activeSiteId) {
-      // New site was added, already tracked via activeSiteId
-    }
-    prevSitesLength.current = sites.length
-  }, [sites.length, activeSiteId])
-
-  const handleGenerate = useCallback(
-    async (prompt: string) => {
-      if (images.length === 0) return
-      setIsGenerating(true)
-
-      try {
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            imageUrls: images,
-            siteName:
-              prompt.split(" ").slice(0, 4).join(" ").substring(0, 30) ||
-              "My Site",
-          }),
-        })
-
-        if (!response.ok) throw new Error("Generation failed")
-
-        const data = await response.json()
-        setActiveSiteId(data.siteId)
-        setImages([])
-
-        // Refresh sites list
+  const handleNewSite = useCallback(async () => {
+    setIsCreating(true)
+    try {
+      const response = await fetch("/api/sites/new", { method: "POST" })
+      const data = await response.json()
+      if (data.siteId) {
         mutate("/api/sites")
-      } catch (error) {
-        console.error("Generation error:", error)
-      } finally {
-        setIsGenerating(false)
+        router.push(`/site/${data.siteId}`)
       }
+    } catch (error) {
+      console.error("Failed to create site:", error)
+    } finally {
+      setIsCreating(false)
+    }
+    if (isMobile) setSidebarOpen(false)
+  }, [router, isMobile])
+
+  const handleSelectSite = useCallback(
+    (id: string) => {
+      router.push(`/site/${id}`)
+      if (isMobile) setSidebarOpen(false)
     },
-    [images]
+    [router, isMobile]
   )
 
-  const handleNewSite = useCallback(() => {
-    setActiveSiteId(null)
-    setImages([])
-    if (isMobile) setSidebarOpen(false)
-  }, [isMobile])
-
-  const handleSelectSite = useCallback((id: string) => {
-    setActiveSiteId(id)
-    setImages([])
-    if (isMobile) setSidebarOpen(false)
-  }, [isMobile])
-
-  const handleReset = useCallback(() => {
-    setActiveSiteId(null)
-    setImages([])
-  }, [])
-
-  const isShowingNewSiteForm = !activeSiteId
-
-  // Sidebar content (shared between mobile Sheet and desktop)
   const sidebarContent = (
     <AppSidebar
       sites={sites}
-      activeSiteId={activeSiteId}
+      activeSiteId={null}
       onSelectSite={handleSelectSite}
       onNewSite={handleNewSite}
       onToggle={() => setSidebarOpen(false)}
@@ -142,7 +86,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar - always visible on mobile, conditional on desktop */}
+        {/* Top bar */}
         <div className="flex items-center border-b border-border px-3 py-2 md:px-4">
           <Button
             variant="ghost"
@@ -160,55 +104,83 @@ export default function Home() {
         </div>
 
         {/* Content area */}
-        <div className="flex flex-1 items-start justify-center overflow-y-auto">
-          <div className="w-full max-w-2xl px-4 py-6 md:px-6 md:py-12">
-            {isShowingNewSiteForm ? (
-              <div className="flex flex-col gap-6 md:gap-8">
-                {/* Hero */}
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-                    <Sparkles className="h-6 w-6 text-primary" />
-                  </div>
-                  <h1 className="text-xl font-bold tracking-tight text-foreground text-balance md:text-2xl">
-                    Create a personalized site
-                  </h1>
-                  <p className="max-w-md text-sm text-muted-foreground text-pretty">
-                    Upload your images and describe the site you want. Our AI
-                    will analyze your photos and generate a custom website.
+        <div className="flex flex-1 items-center justify-center overflow-y-auto">
+          <div className="w-full max-w-md px-4 py-6 md:px-6 md:py-12">
+            <div className="flex flex-col items-center gap-6 text-center">
+              {/* Hero */}
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance md:text-3xl">
+                  AI Site Generator
+                </h1>
+                <p className="text-base text-muted-foreground text-pretty">
+                  Upload your images and describe your vision. Our AI creates a
+                  custom, deployable website with a unique domain.
+                </p>
+              </div>
+
+              {/* CTA */}
+              <Button
+                size="lg"
+                onClick={handleNewSite}
+                disabled={isCreating}
+                className="h-12 gap-2 px-6"
+              >
+                {isCreating ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5" />
+                    Create New Site
+                  </>
+                )}
+              </Button>
+
+              {/* Recent sites */}
+              {sites.length > 0 && (
+                <div className="mt-4 w-full">
+                  <p className="mb-3 text-sm font-medium text-muted-foreground">
+                    Recent sites
                   </p>
+                  <div className="flex flex-col gap-2">
+                    {sites.slice(0, 3).map((site) => (
+                      <button
+                        key={site.id}
+                        onClick={() => handleSelectSite(site.id)}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+                      >
+                        {site.imageUrls[0] ? (
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border">
+                            <img
+                              src={site.imageUrls[0]}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                            <Sparkles className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-sm font-medium text-foreground truncate">
+                            {site.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {site.status === "draft" ? "Not started" : site.status}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-
-                {/* Image Upload */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Your images
-                  </label>
-                  <ImageUploader
-                    images={images}
-                    onImagesChange={setImages}
-                    disabled={isGenerating}
-                  />
-                </div>
-
-                {/* Prompt Input */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Describe your site
-                  </label>
-                  <PromptInput
-                    onSubmit={handleGenerate}
-                    disabled={isGenerating}
-                    hasImages={images.length > 0}
-                  />
-                </div>
-              </div>
-            ) : activeSite ? (
-              <GenerationStatus site={activeSite} onReset={handleReset} />
-            ) : (
-              <div className="flex items-center justify-center py-20">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </main>
