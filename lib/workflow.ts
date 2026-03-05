@@ -11,23 +11,22 @@ async function analyzeImages(
   updateSiteStatus(siteId, "analyzing", 1)
 
   console.log("[v0] analyzeImages: starting with", imageUrls.length, "images")
+  console.log("[v0] analyzeImages: image URLs:", imageUrls)
 
-  // Fetch images as base64 to ensure the AI Gateway receives valid image data
+  // Fetch images and pass as Uint8Array - this is most reliable for AI SDK
   const imageContent = await Promise.all(
     imageUrls.map(async (url) => {
+      console.log("[v0] analyzeImages: fetching", url)
       const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`)
+      }
       const arrayBuffer = await response.arrayBuffer()
-      const base64 = Buffer.from(arrayBuffer).toString("base64")
-      const contentType = response.headers.get("content-type") || "image/png"
-      console.log(
-        "[v0] analyzeImages: fetched image, type:",
-        contentType,
-        "size:",
-        arrayBuffer.byteLength
-      )
+      const uint8Array = new Uint8Array(arrayBuffer)
+      console.log("[v0] analyzeImages: fetched image, size:", uint8Array.length, "bytes")
       return {
         type: "image" as const,
-        image: `data:${contentType};base64,${base64}`,
+        image: uint8Array,
       }
     })
   )

@@ -1,0 +1,3 @@
+# Ignore cached workflow routes from previous deployments
+app/.well-known/
+.well-known/
