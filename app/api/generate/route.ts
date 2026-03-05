@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { nanoid } from "nanoid"
 import { createSite, updateSiteStatus } from "@/lib/sites-store"
 import type { GenerateRequest } from "@/lib/types"
-import { start } from "workflow/api"
 import { siteGenerationWorkflow } from "@/lib/workflow"
 
 export const maxDuration = 300
@@ -23,23 +22,15 @@ export async function POST(request: Request) {
     const siteId = nanoid(12)
     const site = createSite(siteId, prompt, imageUrls, siteName)
 
-    // Start the durable workflow
-    try {
-      await start(siteGenerationWorkflow, [siteId, prompt, imageUrls, site.name])
-    } catch (workflowError) {
-      // If workflow infrastructure is not available (dev mode, no Vercel),
-      // fall back to direct execution
-      console.warn("Workflow start failed, falling back to direct execution:", workflowError)
-      siteGenerationWorkflow(siteId, prompt, imageUrls, site.name).catch(
-        (error) => {
-          console.error(`Workflow failed for site ${siteId}:`, error)
-          updateSiteStatus(siteId, "error", -1, {
-            error:
-              error instanceof Error ? error.message : "Workflow failed",
-          })
-        }
-      )
-    }
+    // Start the generation pipeline in the background (fire-and-forget)
+    siteGenerationWorkflow(siteId, prompt, imageUrls, site.name).catch(
+      (error) => {
+        console.error(`Workflow failed for site ${siteId}:`, error)
+        updateSiteStatus(siteId, "error", -1, {
+          error: error instanceof Error ? error.message : "Workflow failed",
+        })
+      }
+    )
 
     return NextResponse.json({ siteId, site })
   } catch (error) {

@@ -3,12 +3,10 @@ import { v0 } from "./v0-client"
 import { updateSiteStatus } from "./sites-store"
 
 // Step 1: Analyze images with AI vision via AI Gateway
-export async function analyzeImages(
+async function analyzeImages(
   siteId: string,
   imageUrls: string[]
 ): Promise<string> {
-  "use step"
-
   updateSiteStatus(siteId, "analyzing", 1)
 
   const imageContent = imageUrls.map((url) => ({
@@ -43,14 +41,12 @@ Provide a comprehensive analysis that will help create a beautiful, personalized
 }
 
 // Step 2: Build an optimized v0 prompt
-export async function buildPrompt(
+async function buildPrompt(
   siteId: string,
   userPrompt: string,
   imageAnalysis: string,
   imageUrls: string[]
 ): Promise<string> {
-  "use step"
-
   updateSiteStatus(siteId, "prompting", 2)
 
   const result = await generateText({
@@ -87,13 +83,11 @@ Generate an optimized v0 prompt that will create a stunning, personalized websit
 }
 
 // Step 3: Create v0 project and chat
-export async function createV0Site(
+async function createV0Site(
   siteId: string,
   craftedPrompt: string,
   imageUrls: string[]
 ): Promise<{ chatId: string; projectId: string }> {
-  "use step"
-
   updateSiteStatus(siteId, "generating", 3)
 
   const chat = await v0.chats.create({
@@ -101,18 +95,20 @@ export async function createV0Site(
     attachments: imageUrls.map((url) => ({ url })),
   })
 
-  // chat.create returns ChatDetail | ChatsCreateStreamResponse
-  // Since we're not streaming, we get ChatDetail which has .id
-  const chatData = chat as { id: string; projectId?: string; latestVersion?: { id: string; demoUrl?: string } }
+  const chatData = chat as {
+    id: string
+    projectId?: string
+    latestVersion?: { id: string; demoUrl?: string }
+  }
   const chatId = chatData.id
   const projectId = chatData.projectId
 
-  // If no project, try to get it from the chat
   let resolvedProjectId = projectId || ""
   if (!resolvedProjectId && chatId) {
     try {
       const project = await v0.projects.getByChatId({ chatId })
-      resolvedProjectId = (project as Record<string, unknown>).id as string || ""
+      resolvedProjectId =
+        ((project as Record<string, unknown>).id as string) || ""
     } catch {
       // Project might not be created yet
     }
@@ -122,12 +118,10 @@ export async function createV0Site(
 }
 
 // Step 4: Poll for v0 generation completion
-export async function waitForGeneration(
+async function waitForGeneration(
   siteId: string,
   chatId: string
 ): Promise<{ versionId: string; previewUrl: string }> {
-  "use step"
-
   const maxAttempts = 60
   let attempts = 0
 
@@ -160,18 +154,15 @@ export async function waitForGeneration(
 }
 
 // Step 5: Assign a unique subdomain via Vercel Domains API
-export async function assignDomain(
+async function assignDomain(
   siteId: string,
   siteName: string,
   v0ProjectId: string
 ): Promise<string> {
-  "use step"
-
   updateSiteStatus(siteId, "assigning-domain", 5)
 
   const rootDomain = process.env.ROOT_DOMAIN
   if (!rootDomain || !v0ProjectId) {
-    // Skip domain assignment if not configured
     return ""
   }
 
@@ -207,20 +198,21 @@ export async function assignDomain(
   }
 }
 
-// Main workflow orchestrator
+// Main workflow orchestrator -- runs as a plain async pipeline.
+// When deployed on Vercel with the Workflow DevKit enabled, each step
+// can optionally be wrapped with `"use step"` / `"use workflow"` directives
+// for durable retry semantics. For local dev we run them sequentially.
 export async function siteGenerationWorkflow(
   siteId: string,
   prompt: string,
   imageUrls: string[],
   siteName: string
 ) {
-  "use workflow"
-
   try {
-    // Step 1: Analyze images
+    // Step 1
     const imageAnalysis = await analyzeImages(siteId, imageUrls)
 
-    // Step 2: Build optimized prompt
+    // Step 2
     const craftedPrompt = await buildPrompt(
       siteId,
       prompt,
@@ -228,7 +220,7 @@ export async function siteGenerationWorkflow(
       imageUrls
     )
 
-    // Step 3: Create v0 site
+    // Step 3
     const { chatId, projectId } = await createV0Site(
       siteId,
       craftedPrompt,
@@ -242,13 +234,13 @@ export async function siteGenerationWorkflow(
       craftedPrompt,
     })
 
-    // Step 4: Wait for generation to complete
+    // Step 4
     const { versionId, previewUrl } = await waitForGeneration(siteId, chatId)
 
-    // Step 5: Assign domain
+    // Step 5
     const domain = await assignDomain(siteId, siteName, projectId)
 
-    // Final: mark complete
+    // Mark complete
     updateSiteStatus(siteId, "complete", 6, {
       v0VersionId: versionId,
       previewUrl,
@@ -256,14 +248,7 @@ export async function siteGenerationWorkflow(
       domain: domain || undefined,
     })
 
-    return {
-      siteId,
-      chatId,
-      projectId,
-      versionId,
-      previewUrl,
-      domain,
-    }
+    return { siteId, chatId, projectId, versionId, previewUrl, domain }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred"
