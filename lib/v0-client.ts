@@ -1,5 +1,2 @@
-import { createClient } from "v0-sdk"
-
-export const v0 = createClient({
-  apiKey: process.env.V0_API_KEY!,
-})
+// The v0-sdk default export reads from process.env.V0_API_KEY automatically
+export { v0 } from "v0-sdk"

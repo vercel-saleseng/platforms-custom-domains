@@ -50,3 +50,4 @@ export interface GenerateRequest {
 export interface UploadResponse {
   urls: string[]
 }
+

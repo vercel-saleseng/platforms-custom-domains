@@ -1,6 +1,7 @@
 import { generateText } from "ai"
 import { v0 } from "./v0-client"
 import { updateSiteStatus } from "./sites-store"
+import type { ChatDetail } from "v0-sdk"
 
 // Step 1: Analyze images with AI vision via AI Gateway
 async function analyzeImages(
@@ -9,10 +10,27 @@ async function analyzeImages(
 ): Promise<string> {
   updateSiteStatus(siteId, "analyzing", 1)
 
-  const imageContent = imageUrls.map((url) => ({
-    type: "image" as const,
-    image: new URL(url),
-  }))
+  console.log("[v0] analyzeImages: starting with", imageUrls.length, "images")
+
+  // Fetch images as base64 to ensure the AI Gateway receives valid image data
+  const imageContent = await Promise.all(
+    imageUrls.map(async (url) => {
+      const response = await fetch(url)
+      const arrayBuffer = await response.arrayBuffer()
+      const base64 = Buffer.from(arrayBuffer).toString("base64")
+      const contentType = response.headers.get("content-type") || "image/png"
+      console.log(
+        "[v0] analyzeImages: fetched image, type:",
+        contentType,
+        "size:",
+        arrayBuffer.byteLength
+      )
+      return {
+        type: "image" as const,
+        image: `data:${contentType};base64,${base64}`,
+      }
+    })
+  )
 
   const result = await generateText({
     model: "openai/gpt-4o",
@@ -37,6 +55,10 @@ Provide a comprehensive analysis that will help create a beautiful, personalized
     ],
   })
 
+  console.log(
+    "[v0] analyzeImages: completed, analysis length:",
+    result.text.length
+  )
   return result.text
 }
 
@@ -48,6 +70,7 @@ async function buildPrompt(
   imageUrls: string[]
 ): Promise<string> {
   updateSiteStatus(siteId, "prompting", 2)
+  console.log("[v0] buildPrompt: starting")
 
   const result = await generateText({
     model: "openai/gpt-4o",
@@ -58,7 +81,7 @@ async function buildPrompt(
 
 The prompt should:
 - Be specific about layout, sections, and components
-- Reference the image URLs directly so v0 can use them
+- Reference the image URLs directly so v0 can use them in <img> tags
 - Include color palette guidance based on the image analysis
 - Be comprehensive but concise (under 1000 words)
 - Include instructions for responsive design
@@ -68,89 +91,128 @@ The prompt should:
         role: "user",
         content: `User's request: "${userPrompt}"
 
-Image URLs to use in the site:
+Image URLs to use in the site (these are publicly accessible):
 ${imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join("\n")}
 
 Image Analysis:
 ${imageAnalysis}
 
-Generate an optimized v0 prompt that will create a stunning, personalized website. The prompt should directly reference the image URLs above so v0 can embed them in the generated site.`,
+Generate an optimized v0 prompt that will create a stunning, personalized website. The prompt should directly reference the image URLs above so v0 can embed them in <img> tags in the generated site.`,
       },
     ],
   })
 
+  console.log(
+    "[v0] buildPrompt: completed, prompt length:",
+    result.text.length
+  )
   return result.text
 }
 
-// Step 3: Create v0 project and chat
-async function createV0Site(
+// Step 3: Create v0 chat and wait for generation
+async function createAndWaitForV0Site(
   siteId: string,
   craftedPrompt: string,
   imageUrls: string[]
-): Promise<{ chatId: string; projectId: string }> {
+): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
   updateSiteStatus(siteId, "generating", 3)
+  console.log("[v0] createV0Site: creating chat with v0 SDK")
 
+  // Create the chat -- default responseMode is 'sync', which waits for completion
   const chat = await v0.chats.create({
     message: craftedPrompt,
     attachments: imageUrls.map((url) => ({ url })),
+  }) as ChatDetail
+
+  console.log("[v0] createV0Site: chat created:", {
+    id: chat.id,
+    projectId: chat.projectId,
+    hasLatestVersion: !!chat.latestVersion,
+    versionStatus: chat.latestVersion?.status,
+    demoUrl: chat.latestVersion?.demoUrl,
   })
 
-  const chatData = chat as {
-    id: string
-    projectId?: string
-    latestVersion?: { id: string; demoUrl?: string }
-  }
-  const chatId = chatData.id
-  const projectId = chatData.projectId
+  const chatId = chat.id
+  const projectId = chat.projectId || ""
+  let versionId = chat.latestVersion?.id || ""
+  let previewUrl = chat.latestVersion?.demoUrl || ""
 
-  let resolvedProjectId = projectId || ""
-  if (!resolvedProjectId && chatId) {
-    try {
-      const project = await v0.projects.getByChatId({ chatId })
-      resolvedProjectId =
-        ((project as Record<string, unknown>).id as string) || ""
-    } catch {
-      // Project might not be created yet
-    }
+  // If the sync response already has a completed version with demoUrl, we're done
+  if (previewUrl && chat.latestVersion?.status === "completed") {
+    console.log("[v0] createV0Site: chat already completed with demoUrl:", previewUrl)
+    return { chatId, projectId, versionId, previewUrl }
   }
 
-  return { chatId, projectId: resolvedProjectId }
-}
+  // Otherwise poll for completion
+  console.log("[v0] createV0Site: polling for completion...")
+  updateSiteStatus(siteId, "generating", 3, {
+    v0ChatId: chatId,
+    v0ProjectId: projectId,
+  })
 
-// Step 4: Poll for v0 generation completion
-async function waitForGeneration(
-  siteId: string,
-  chatId: string
-): Promise<{ versionId: string; previewUrl: string }> {
   const maxAttempts = 60
-  let attempts = 0
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  while (attempts < maxAttempts) {
-    const chat = await v0.chats.getById({ chatId })
-    const chatData = chat as Record<string, unknown>
+    const updatedChat = await v0.chats.getById({ chatId }) as ChatDetail
+    const version = updatedChat.latestVersion
 
-    const latestVersion = chatData.latestVersion as
-      | Record<string, unknown>
-      | undefined
+    console.log(
+      "[v0] poll attempt",
+      attempt + 1,
+      "- status:",
+      version?.status,
+      "demoUrl:",
+      version?.demoUrl
+    )
 
-    if (latestVersion) {
-      const demoUrl = (latestVersion.demoUrl as string) || ""
-      const versionId = (latestVersion.id as string) || ""
-
-      if (demoUrl) {
-        updateSiteStatus(siteId, "deploying", 4, {
-          v0VersionId: versionId,
-          previewUrl: demoUrl,
-        })
-        return { versionId, previewUrl: demoUrl }
-      }
+    if (version?.status === "completed" && version.demoUrl) {
+      versionId = version.id
+      previewUrl = version.demoUrl
+      console.log("[v0] createV0Site: generation completed!", previewUrl)
+      return { chatId, projectId, versionId, previewUrl }
     }
 
-    attempts++
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    if (version?.status === "failed") {
+      throw new Error("v0 generation failed")
+    }
   }
 
   throw new Error("Generation timed out after 5 minutes")
+}
+
+// Step 4: Deploy the generated site
+async function deploySite(
+  siteId: string,
+  projectId: string,
+  chatId: string,
+  versionId: string
+): Promise<string> {
+  updateSiteStatus(siteId, "deploying", 4)
+  console.log("[v0] deploySite: creating deployment", { projectId, chatId, versionId })
+
+  if (!projectId || !chatId || !versionId) {
+    console.log("[v0] deploySite: missing required IDs, skipping deployment")
+    return ""
+  }
+
+  try {
+    const deployment = await v0.deployments.create({
+      projectId,
+      chatId,
+      versionId,
+    })
+
+    console.log("[v0] deploySite: deployment created:", {
+      id: deployment.id,
+      webUrl: deployment.webUrl,
+      inspectorUrl: deployment.inspectorUrl,
+    })
+    return deployment.webUrl || ""
+  } catch (error) {
+    console.error("[v0] deploySite: deployment failed:", error)
+    return ""
+  }
 }
 
 // Step 5: Assign a unique subdomain via Vercel Domains API
@@ -163,6 +225,7 @@ async function assignDomain(
 
   const rootDomain = process.env.ROOT_DOMAIN
   if (!rootDomain || !v0ProjectId) {
+    console.log("[v0] assignDomain: skipping - no ROOT_DOMAIN or projectId")
     return ""
   }
 
@@ -171,6 +234,8 @@ async function assignDomain(
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
   const subdomain = `${slug}-${siteId.slice(0, 8)}.${rootDomain}`
+
+  console.log("[v0] assignDomain: assigning", subdomain, "to project", v0ProjectId)
 
   try {
     const response = await fetch(
@@ -187,21 +252,19 @@ async function assignDomain(
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.error("Domain assignment error:", errorData)
+      console.error("[v0] assignDomain: error:", errorData)
       return ""
     }
 
+    console.log("[v0] assignDomain: success:", subdomain)
     return subdomain
   } catch (error) {
-    console.error("Domain assignment failed:", error)
+    console.error("[v0] assignDomain: failed:", error)
     return ""
   }
 }
 
-// Main workflow orchestrator -- runs as a plain async pipeline.
-// When deployed on Vercel with the Workflow DevKit enabled, each step
-// can optionally be wrapped with `"use step"` / `"use workflow"` directives
-// for durable retry semantics. For local dev we run them sequentially.
+// Main workflow orchestrator
 export async function siteGenerationWorkflow(
   siteId: string,
   prompt: string,
@@ -209,10 +272,12 @@ export async function siteGenerationWorkflow(
   siteName: string
 ) {
   try {
-    // Step 1
+    console.log("[v0] workflow: starting for site", siteId)
+
+    // Step 1: Analyze images
     const imageAnalysis = await analyzeImages(siteId, imageUrls)
 
-    // Step 2
+    // Step 2: Build optimized prompt
     const craftedPrompt = await buildPrompt(
       siteId,
       prompt,
@@ -220,12 +285,9 @@ export async function siteGenerationWorkflow(
       imageUrls
     )
 
-    // Step 3
-    const { chatId, projectId } = await createV0Site(
-      siteId,
-      craftedPrompt,
-      imageUrls
-    )
+    // Step 3: Create v0 chat and wait for generation
+    const { chatId, projectId, versionId, previewUrl } =
+      await createAndWaitForV0Site(siteId, craftedPrompt, imageUrls)
 
     updateSiteStatus(siteId, "generating", 3, {
       v0ChatId: chatId,
@@ -234,24 +296,29 @@ export async function siteGenerationWorkflow(
       craftedPrompt,
     })
 
-    // Step 4
-    const { versionId, previewUrl } = await waitForGeneration(siteId, chatId)
+    // Step 4: Deploy
+    const deploymentUrl = await deploySite(siteId, projectId, chatId, versionId)
 
-    // Step 5
+    // Step 5: Assign domain
     const domain = await assignDomain(siteId, siteName, projectId)
 
     // Mark complete
+    const finalUrl = domain
+      ? `https://${domain}`
+      : deploymentUrl || previewUrl
     updateSiteStatus(siteId, "complete", 6, {
       v0VersionId: versionId,
       previewUrl,
-      deploymentUrl: previewUrl,
+      deploymentUrl: finalUrl,
       domain: domain || undefined,
     })
 
+    console.log("[v0] workflow: completed for site", siteId, "url:", finalUrl)
     return { siteId, chatId, projectId, versionId, previewUrl, domain }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred"
+    console.error("[v0] workflow: failed for site", siteId, ":", message)
     updateSiteStatus(siteId, "error", -1, { error: message })
     throw error
   }
