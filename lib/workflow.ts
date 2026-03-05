@@ -8,7 +8,7 @@ async function analyzeImages(
   siteId: string,
   imageUrls: string[]
 ): Promise<string> {
-  updateSiteStatus(siteId, "analyzing", 1)
+  await updateSiteStatus(siteId, "analyzing", 1)
 
   console.log("[v0] analyzeImages: starting with", imageUrls.length, "images")
   console.log("[v0] analyzeImages: image URLs:", imageUrls)
@@ -68,7 +68,7 @@ async function buildPrompt(
   imageAnalysis: string,
   imageUrls: string[]
 ): Promise<string> {
-  updateSiteStatus(siteId, "prompting", 2)
+  await updateSiteStatus(siteId, "prompting", 2)
   console.log("[v0] buildPrompt: starting")
 
   const result = await generateText({
@@ -114,7 +114,7 @@ async function createAndWaitForV0Site(
   craftedPrompt: string,
   imageUrls: string[]
 ): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
-  updateSiteStatus(siteId, "generating", 3)
+  await updateSiteStatus(siteId, "generating", 3)
   console.log("[v0] createV0Site: creating chat with v0 SDK")
 
   // Create the chat -- default responseMode is 'sync', which waits for completion
@@ -144,7 +144,7 @@ async function createAndWaitForV0Site(
 
   // Otherwise poll for completion
   console.log("[v0] createV0Site: polling for completion...")
-  updateSiteStatus(siteId, "generating", 3, {
+  await updateSiteStatus(siteId, "generating", 3, {
     v0ChatId: chatId,
     v0ProjectId: projectId,
   })
@@ -187,7 +187,7 @@ async function deploySite(
   chatId: string,
   versionId: string
 ): Promise<string> {
-  updateSiteStatus(siteId, "deploying", 4)
+  await updateSiteStatus(siteId, "deploying", 4)
   console.log("[v0] deploySite: creating deployment", { projectId, chatId, versionId })
 
   if (!projectId || !chatId || !versionId) {
@@ -220,7 +220,7 @@ async function assignDomain(
   siteName: string,
   v0ProjectId: string
 ): Promise<string> {
-  updateSiteStatus(siteId, "assigning-domain", 5)
+  await updateSiteStatus(siteId, "assigning-domain", 5)
 
   const rootDomain = process.env.ROOT_DOMAIN
   if (!rootDomain || !v0ProjectId) {
@@ -288,11 +288,9 @@ export async function siteGenerationWorkflow(
     const { chatId, projectId, versionId, previewUrl } =
       await createAndWaitForV0Site(siteId, craftedPrompt, imageUrls)
 
-    updateSiteStatus(siteId, "generating", 3, {
+    await updateSiteStatus(siteId, "generating", 3, {
       v0ChatId: chatId,
       v0ProjectId: projectId,
-      imageAnalysis,
-      craftedPrompt,
     })
 
     // Step 4: Deploy
@@ -305,10 +303,9 @@ export async function siteGenerationWorkflow(
     const finalUrl = domain
       ? `https://${domain}`
       : deploymentUrl || previewUrl
-    updateSiteStatus(siteId, "complete", 6, {
+    await updateSiteStatus(siteId, "complete", 6, {
       v0VersionId: versionId,
-      previewUrl,
-      deploymentUrl: finalUrl,
+      previewUrl: finalUrl,
       domain: domain || undefined,
     })
 
@@ -318,7 +315,7 @@ export async function siteGenerationWorkflow(
     const message =
       error instanceof Error ? error.message : "Unknown error occurred"
     console.error("[v0] workflow: failed for site", siteId, ":", message)
-    updateSiteStatus(siteId, "error", -1, { error: message })
+    await updateSiteStatus(siteId, "error", -1, { error: message })
     throw error
   }
 }

@@ -20,13 +20,13 @@ export async function POST(request: Request) {
 
     // Create site record
     const siteId = nanoid(12)
-    const site = createSite(siteId, prompt, imageUrls, siteName)
+    const site = await createSite(siteId, prompt, imageUrls, siteName)
 
     // Start the generation pipeline in the background (fire-and-forget)
     siteGenerationWorkflow(siteId, prompt, imageUrls, site.name).catch(
-      (error) => {
+      async (error) => {
         console.error(`Workflow failed for site ${siteId}:`, error)
-        updateSiteStatus(siteId, "error", -1, {
+        await updateSiteStatus(siteId, "error", -1, {
           error: error instanceof Error ? error.message : "Workflow failed",
         })
       }

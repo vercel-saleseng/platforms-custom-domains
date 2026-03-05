@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const sites = getAllSites()
+    const sites = await getAllSites()
     return NextResponse.json({ sites })
   } catch (error) {
     console.error("Error fetching sites:", error)
