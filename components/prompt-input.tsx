@@ -60,14 +60,14 @@ export function PromptInput({
           }
           disabled={disabled}
           rows={1}
-          className="max-h-[200px] min-h-[52px] flex-1 resize-none bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+          className="max-h-[200px] min-h-[52px] flex-1 resize-none bg-transparent px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 md:text-sm"
         />
         <div className="p-2">
           <Button
             size="icon"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="h-8 w-8 rounded-lg"
+            className="h-10 w-10 rounded-lg md:h-8 md:w-8"
             aria-label="Generate site"
           >
             <ArrowUp className="h-4 w-4" />

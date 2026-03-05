@@ -24,7 +24,7 @@ export function SiteCard({ site, isActive, onClick }: SiteCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors active:bg-sidebar-accent/70 md:py-2.5 ${
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-sidebar-foreground hover:bg-sidebar-accent/50"
@@ -32,7 +32,7 @@ export function SiteCard({ site, isActive, onClick }: SiteCardProps) {
     >
       {/* Thumbnail */}
       {site.imageUrls[0] ? (
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border border-sidebar-border">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-sidebar-border md:h-8 md:w-8">
           <img
             src={site.imageUrls[0]}
             alt=""
@@ -40,7 +40,7 @@ export function SiteCard({ site, isActive, onClick }: SiteCardProps) {
           />
         </div>
       ) : (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent md:h-8 md:w-8">
           <Globe className="h-4 w-4 text-sidebar-foreground/50" />
         </div>
       )}

@@ -12,6 +12,7 @@ interface AppSidebarProps {
   onSelectSite: (id: string) => void
   onNewSite: () => void
   onToggle: () => void
+  isMobile?: boolean
 }
 
 export function AppSidebar({
@@ -20,33 +21,36 @@ export function AppSidebar({
   onSelectSite,
   onNewSite,
   onToggle,
+  isMobile,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-sidebar-primary" />
-          <span className="text-sm font-semibold text-sidebar-foreground">
-            Site Generator
-          </span>
+    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar">
+      {/* Header - only show on desktop (mobile has header in Sheet) */}
+      {!isMobile && (
+        <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-sidebar-primary" />
+            <span className="text-sm font-semibold text-sidebar-foreground">
+              Site Generator
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            aria-label="Collapse sidebar"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground"
-          aria-label="Collapse sidebar"
-        >
-          <PanelLeftClose className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
 
       {/* New Site CTA */}
       <div className="p-3">
         <Button
           onClick={onNewSite}
-          className="w-full justify-start gap-2"
+          className="h-11 w-full justify-start gap-2 md:h-9"
           size="sm"
         >
           <Plus className="h-4 w-4" />
@@ -63,7 +67,7 @@ export function AppSidebar({
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             {sites.map((site) => (
               <SiteCard
                 key={site.id}

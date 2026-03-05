@@ -49,9 +49,9 @@ export function GenerationStatus({ site, onReset }: GenerationStatusProps) {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground text-balance">
+          <h2 className="text-base font-semibold text-foreground text-balance md:text-lg">
             {isComplete
               ? "Your site is ready!"
               : isError
@@ -135,13 +135,13 @@ export function GenerationStatus({ site, onReset }: GenerationStatusProps) {
 
       {/* Success - Site Preview */}
       {isComplete && siteUrl && (
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-3 md:p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-0.5 min-w-0">
               <p className="text-sm font-medium text-foreground">Site URL</p>
-              <p className="text-xs text-muted-foreground">{siteUrl}</p>
+              <p className="truncate text-xs text-muted-foreground">{siteUrl}</p>
             </div>
-            <Button size="sm" asChild>
+            <Button size="sm" className="h-11 md:h-9 shrink-0" asChild>
               <a href={siteUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-2 h-3.5 w-3.5" />
                 Visit Site
@@ -153,7 +153,7 @@ export function GenerationStatus({ site, onReset }: GenerationStatusProps) {
             <iframe
               src={siteUrl}
               title={`Preview of ${site.name}`}
-              className="h-[400px] w-full"
+              className="h-[250px] w-full md:h-[400px]"
               sandbox="allow-scripts allow-same-origin"
             />
           </div>

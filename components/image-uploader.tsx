@@ -97,7 +97,7 @@ export function ImageUploader({
           {images.map((url, index) => (
             <div
               key={url}
-              className="group relative h-20 w-20 overflow-hidden rounded-lg border border-border"
+              className="group relative h-16 w-16 overflow-hidden rounded-lg border border-border md:h-20 md:w-20"
             >
               <img
                 src={url}
@@ -108,7 +108,7 @@ export function ImageUploader({
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
-                  className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
                   aria-label={`Remove image ${index + 1}`}
                 >
                   <X className="h-4 w-4 text-foreground" />
@@ -121,7 +121,7 @@ export function ImageUploader({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary active:bg-primary/5 md:h-20 md:w-20"
               aria-label="Add more images"
             >
               {isUploading ? (
@@ -149,7 +149,7 @@ export function ImageUploader({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 transition-colors ${
+      className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 transition-colors md:p-8 ${
         isDragging
           ? "border-primary bg-primary/5"
           : "border-border hover:border-muted-foreground/50"
