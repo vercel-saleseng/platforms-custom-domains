@@ -108,6 +108,16 @@ Generate an optimized v0 prompt that will create a stunning, personalized websit
   return result.text
 }
 
+// Helper to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ])
+}
+
 // Step 3: Create v0 chat and wait for generation
 async function createAndWaitForV0Site(
   siteId: string,
@@ -116,12 +126,21 @@ async function createAndWaitForV0Site(
 ): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
   await updateSiteStatus(siteId, "generating", 3)
   console.log("[v0] createV0Site: creating chat with v0 SDK")
+  console.log("[v0] createV0Site: prompt length:", craftedPrompt.length)
+  console.log("[v0] createV0Site: attachments:", imageUrls.length)
 
-  // Create the chat -- default responseMode is 'sync', which waits for completion
-  const chat = await v0.chats.create({
-    message: craftedPrompt,
-    attachments: imageUrls.map((url) => ({ url })),
-  }) as ChatDetail
+  try {
+    // Create the chat with a 3-minute timeout (v0 generation can take a while)
+    const chat = await withTimeout(
+      v0.chats.create({
+        message: craftedPrompt,
+        attachments: imageUrls.map((url) => ({ url })),
+      }),
+      180000, // 3 minutes
+      "v0 chat creation timed out after 3 minutes"
+    ) as ChatDetail
+    
+    console.log("[v0] createV0Site: v0.chats.create returned successfully")
 
   console.log("[v0] createV0Site: chat created:", {
     id: chat.id,
@@ -178,6 +197,10 @@ async function createAndWaitForV0Site(
   }
 
   throw new Error("Generation timed out after 5 minutes")
+  } catch (error) {
+    console.error("[v0] createV0Site: error during v0 chat creation:", error)
+    throw error
+  }
 }
 
 // Step 4: Deploy the generated site and get Vercel project ID
