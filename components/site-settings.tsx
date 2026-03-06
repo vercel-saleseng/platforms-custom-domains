@@ -1,16 +1,22 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Globe,
-  ExternalLink,
-  Copy,
-  CheckCircle2,
-  Info,
-} from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { 
+  Check, 
+  X, 
+  Loader2, 
+  Copy, 
+  ExternalLink,
+  AlertCircle,
+  Globe,
+  RefreshCw
+} from "lucide-react"
 import type { SiteRecord } from "@/lib/types"
 
 interface SiteSettingsProps {
@@ -19,156 +25,519 @@ interface SiteSettingsProps {
 }
 
 export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
-  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [name, setName] = useState(site.name)
+  const [isSavingName, setIsSavingName] = useState(false)
   
-  const currentUrl = site.domain ? `https://${site.domain}` : site.previewUrl
-  const v0ProjectUrl = site.v0ProjectId 
-    ? `https://v0.dev/chat/${site.v0ChatId}`
-    : null
+  // Subdomain state
+  const [subdomain, setSubdomain] = useState("")
+  const [subdomainStatus, setSubdomainStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
+  const [isAssigningSubdomain, setIsAssigningSubdomain] = useState(false)
   
-  const isGenerating = !site.v0ProjectId || site.status !== "complete"
+  // Custom domain state
+  const [customDomain, setCustomDomain] = useState("")
+  const [isAddingCustomDomain, setIsAddingCustomDomain] = useState(false)
+  const [customDomainResult, setCustomDomainResult] = useState<{
+    success: boolean
+    verified: boolean
+    dnsRecords?: Array<{ type: string; name: string; value: string }>
+    error?: string
+  } | null>(null)
+  const [isVerifying, setIsVerifying] = useState(false)
+  
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  const copyToClipboard = async (text: string, field: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopiedField(field)
-    setTimeout(() => setCopiedField(null), 2000)
+  const hasVercelProject = !!site.vercelProjectId
+  const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
+
+  // Debounced subdomain availability check
+  useEffect(() => {
+    if (!subdomain || !hasVercelProject) {
+      setSubdomainStatus("idle")
+      return
+    }
+
+    // Validate format first
+    const subdomainRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+    if (!subdomainRegex.test(subdomain)) {
+      setSubdomainStatus("invalid")
+      return
+    }
+
+    setSubdomainStatus("checking")
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/domains/check?subdomain=${encodeURIComponent(subdomain)}&projectId=${site.vercelProjectId}`
+        )
+        const data = await res.json()
+        
+        if (data.available) {
+          setSubdomainStatus("available")
+        } else {
+          setSubdomainStatus("taken")
+        }
+      } catch {
+        setSubdomainStatus("idle")
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [subdomain, hasVercelProject, site.vercelProjectId])
+
+  const handleSaveName = async () => {
+    if (!name.trim() || name === site.name) return
+    
+    setIsSavingName(true)
+    setError(null)
+    
+    try {
+      const res = await fetch(`/api/sites/${site.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+      
+      if (!res.ok) throw new Error("Failed to save name")
+      
+      setSuccessMessage("Name updated successfully")
+      setTimeout(() => setSuccessMessage(null), 3000)
+      onSiteUpdated()
+    } catch {
+      setError("Failed to save name")
+    } finally {
+      setIsSavingName(false)
+    }
   }
+
+  const handleAssignSubdomain = async () => {
+    if (!subdomain || subdomainStatus !== "available") return
+    
+    setIsAssigningSubdomain(true)
+    setError(null)
+    
+    try {
+      const res = await fetch("/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: site.id,
+          subdomain,
+        }),
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to assign subdomain")
+      }
+      
+      setSuccessMessage(`Domain ${data.domain} assigned successfully!`)
+      setSubdomain("")
+      setSubdomainStatus("idle")
+      onSiteUpdated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign subdomain")
+    } finally {
+      setIsAssigningSubdomain(false)
+    }
+  }
+
+  const handleAddCustomDomain = async () => {
+    if (!customDomain) return
+    
+    setIsAddingCustomDomain(true)
+    setError(null)
+    setCustomDomainResult(null)
+    
+    try {
+      const res = await fetch("/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: site.id,
+          customDomain,
+        }),
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add domain")
+      }
+      
+      setCustomDomainResult({
+        success: true,
+        verified: data.verified,
+        dnsRecords: data.dnsRecords,
+      })
+      
+      if (data.verified) {
+        setSuccessMessage(`Domain ${data.domain} added and verified!`)
+        setCustomDomain("")
+        onSiteUpdated()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add domain")
+    } finally {
+      setIsAddingCustomDomain(false)
+    }
+  }
+
+  const handleVerifyDomain = async () => {
+    setIsVerifying(true)
+    setError(null)
+    
+    try {
+      const res = await fetch("/api/domains/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: site.id,
+          domain: customDomain,
+        }),
+      })
+      
+      const data = await res.json()
+      
+      if (data.verified) {
+        setSuccessMessage("Domain verified successfully!")
+        setCustomDomainResult(null)
+        setCustomDomain("")
+        onSiteUpdated()
+      } else {
+        setError("Domain not yet verified. Please check your DNS settings.")
+      }
+    } catch {
+      setError("Failed to verify domain")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text)
+  }, [])
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Current URL */}
-      {currentUrl && (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <Label className="text-sm font-medium text-foreground">Current Site URL</Label>
-          <div className="mt-2 flex items-center gap-2">
-            <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2">
-              <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate text-sm text-foreground">{currentUrl}</span>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => copyToClipboard(currentUrl, "url")}
-              className="shrink-0"
-            >
-              {copiedField === "url" ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-            </Button>
-            <Button variant="outline" size="icon" asChild className="shrink-0">
-              <a href={currentUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
-          </div>
-        </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
+      {successMessage && (
+        <Alert className="border-green-500/50 bg-green-500/10">
+          <Check className="h-4 w-4 text-green-500" />
+          <AlertDescription className="text-green-500">{successMessage}</AlertDescription>
+        </Alert>
       )}
 
-      {/* Domain Management Info */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-          <div className="flex flex-col gap-2">
-            <h3 className="font-medium text-foreground">Custom Domain Setup</h3>
-            <p className="text-sm text-muted-foreground">
-              To add a custom domain to your v0-generated site, you need to configure it through the v0 dashboard. 
-              This allows you to connect your own domain or choose a subdomain.
-            </p>
-            {v0ProjectUrl ? (
-              <Button variant="default" size="sm" className="mt-2 w-fit" asChild>
-                <a href={v0ProjectUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open in v0 Dashboard
+      {/* Site Name Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Site Name</CardTitle>
+          <CardDescription>Change the display name for your site</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-3">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Site name"
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSaveName}
+              disabled={isSavingName || !name.trim() || name === site.name}
+            >
+              {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Current Domain Card */}
+      {site.domain && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Current Domain
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
+                {site.domain}
+              </code>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copyToClipboard(`https://${site.domain}`)}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" asChild>
+                <a href={`https://${site.domain}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
-            ) : isGenerating ? (
-              <p className="mt-1 text-sm text-amber-500">
-                Site generation must complete before domain settings are available.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      {/* Site Details */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-4 font-medium text-foreground">Site Details</h3>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Site ID</span>
-            <code className="rounded bg-muted px-2 py-1 text-xs text-foreground">{site.id}</code>
-          </div>
-          {site.v0ChatId && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">v0 Chat ID</span>
-              <code className="rounded bg-muted px-2 py-1 text-xs text-foreground">{site.v0ChatId}</code>
             </div>
-          )}
-          {site.v0ProjectId && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">v0 Project ID</span>
-              <code className="rounded bg-muted px-2 py-1 text-xs text-foreground">{site.v0ProjectId}</code>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <span className={`rounded px-2 py-1 text-xs font-medium ${
-              site.status === "complete" 
-                ? "bg-green-500/10 text-green-500" 
-                : site.status === "error"
-                ? "bg-red-500/10 text-red-500"
-                : "bg-amber-500/10 text-amber-500"
-            }`}>
-              {site.status}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Created</span>
-            <span className="text-sm text-foreground">
-              {new Date(site.createdAt).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Rename Site */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-4 font-medium text-foreground">Rename Site</h3>
-        <form 
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const formData = new FormData(e.currentTarget)
-            const newName = formData.get("name") as string
-            if (!newName.trim()) return
-            
-            try {
-              const response = await fetch(`/api/sites/${site.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: newName.trim() }),
-              })
-              if (response.ok) {
-                onSiteUpdated()
-              }
-            } catch (err) {
-              console.error("Failed to rename site:", err)
-            }
-          }}
-          className="flex gap-2"
-        >
-          <Input
-            name="name"
-            defaultValue={site.name}
-            placeholder="Site name"
-            className="flex-1"
-          />
-          <Button type="submit" variant="outline">
-            Save
-          </Button>
-        </form>
-      </div>
+      {/* Domain Configuration */}
+      {!hasVercelProject ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Custom Domain</CardTitle>
+            <CardDescription>
+              {isGenerating 
+                ? "Domain settings will be available after your site finishes generating."
+                : "Generate your site first to enable domain settings."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Generating site...</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Complete site generation to configure domains</span>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Custom Domain</CardTitle>
+            <CardDescription>
+              Choose a free subdomain or connect your own domain
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="subdomain" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="subdomain">Subdomain</TabsTrigger>
+                <TabsTrigger value="custom">Custom Domain</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="subdomain" className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label>Choose a subdomain</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get a free subdomain on vercel.zone
+                  </p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
+                      placeholder="my-site"
+                      className="pr-24"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      .vercel.zone
+                    </span>
+                  </div>
+                  <Button
+                    onClick={handleAssignSubdomain}
+                    disabled={
+                      !subdomain ||
+                      subdomainStatus !== "available" ||
+                      isAssigningSubdomain
+                    }
+                  >
+                    {isAssigningSubdomain ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Assign"
+                    )}
+                  </Button>
+                </div>
+                
+                {subdomain && (
+                  <div className="flex items-center gap-2 text-sm">
+                    {subdomainStatus === "checking" && (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <span className="text-muted-foreground">Checking availability...</span>
+                      </>
+                    )}
+                    {subdomainStatus === "available" && (
+                      <>
+                        <Check className="h-4 w-4 text-green-500" />
+                        <span className="text-green-500">{subdomain}.vercel.zone is available</span>
+                      </>
+                    )}
+                    {subdomainStatus === "taken" && (
+                      <>
+                        <X className="h-4 w-4 text-red-500" />
+                        <span className="text-red-500">This subdomain is taken</span>
+                      </>
+                    )}
+                    {subdomainStatus === "invalid" && (
+                      <>
+                        <X className="h-4 w-4 text-red-500" />
+                        <span className="text-red-500">Invalid format. Use lowercase letters, numbers, and hyphens.</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="custom" className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label>Add a custom domain</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Connect your own domain to this site
+                  </p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Input
+                    value={customDomain}
+                    onChange={(e) => setCustomDomain(e.target.value.toLowerCase())}
+                    placeholder="example.com"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleAddCustomDomain}
+                    disabled={!customDomain || isAddingCustomDomain}
+                  >
+                    {isAddingCustomDomain ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Add"
+                    )}
+                  </Button>
+                </div>
+                
+                {/* DNS Configuration */}
+                {customDomainResult && !customDomainResult.verified && customDomainResult.dnsRecords && (
+                  <div className="mt-4 space-y-4 rounded-lg border border-border p-4">
+                    <div className="space-y-1">
+                      <h4 className="font-medium">Configure DNS</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Add the following DNS records to your domain provider
+                      </p>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="pb-2 pr-4 text-left font-medium">Type</th>
+                            <th className="pb-2 pr-4 text-left font-medium">Name</th>
+                            <th className="pb-2 pr-4 text-left font-medium">Value</th>
+                            <th className="pb-2 text-left font-medium"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {customDomainResult.dnsRecords.map((record, i) => (
+                            <tr key={i} className="border-b border-border last:border-0">
+                              <td className="py-2 pr-4">
+                                <code className="rounded bg-muted px-1.5 py-0.5">
+                                  {record.type}
+                                </code>
+                              </td>
+                              <td className="py-2 pr-4 font-mono text-xs">
+                                {record.name}
+                              </td>
+                              <td className="py-2 pr-4 font-mono text-xs">
+                                {record.value}
+                              </td>
+                              <td className="py-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => copyToClipboard(record.value)}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    <Button
+                      onClick={handleVerifyDomain}
+                      disabled={isVerifying}
+                      className="w-full"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Verify Domain
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Site Details Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Site Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Site ID</dt>
+              <dd className="font-mono">{site.id}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Status</dt>
+              <dd className="capitalize">{site.status}</dd>
+            </div>
+            {site.v0ProjectId && (
+              <div>
+                <dt className="text-muted-foreground">v0 Project ID</dt>
+                <dd className="font-mono text-xs">{site.v0ProjectId}</dd>
+              </div>
+            )}
+            {site.vercelProjectId && (
+              <div>
+                <dt className="text-muted-foreground">Vercel Project ID</dt>
+                <dd className="font-mono text-xs">{site.vercelProjectId}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-muted-foreground">Created</dt>
+              <dd>{new Date(site.createdAt).toLocaleDateString()}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Updated</dt>
+              <dd>{new Date(site.updatedAt).toLocaleDateString()}</dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -180,19 +180,19 @@ async function createAndWaitForV0Site(
   throw new Error("Generation timed out after 5 minutes")
 }
 
-// Step 4: Deploy the generated site
+// Step 4: Deploy the generated site and get Vercel project ID
 async function deploySite(
   siteId: string,
   projectId: string,
   chatId: string,
   versionId: string
-): Promise<string> {
+): Promise<{ deploymentUrl: string; vercelProjectId: string }> {
   await updateSiteStatus(siteId, "deploying", 4)
   console.log("[v0] deploySite: creating deployment", { projectId, chatId, versionId })
 
   if (!projectId || !chatId || !versionId) {
     console.log("[v0] deploySite: missing required IDs, skipping deployment")
-    return ""
+    return { deploymentUrl: "", vercelProjectId: "" }
   }
 
   try {
@@ -204,13 +204,28 @@ async function deploySite(
 
     console.log("[v0] deploySite: deployment created:", {
       id: deployment.id,
+      projectId: deployment.projectId,
       webUrl: deployment.webUrl,
       inspectorUrl: deployment.inspectorUrl,
     })
-    return deployment.webUrl || ""
+
+    // Fetch the project details to get the Vercel project ID
+    let vercelProjectId = ""
+    try {
+      const projectDetails = await v0.projects.getById({ projectId })
+      vercelProjectId = projectDetails.vercelProjectId || ""
+      console.log("[v0] deploySite: fetched vercelProjectId:", vercelProjectId)
+    } catch (err) {
+      console.error("[v0] deploySite: failed to fetch project details:", err)
+    }
+
+    return { 
+      deploymentUrl: deployment.webUrl || "", 
+      vercelProjectId 
+    }
   } catch (error) {
     console.error("[v0] deploySite: deployment failed:", error)
-    return ""
+    return { deploymentUrl: "", vercelProjectId: "" }
   }
 }
 
@@ -293,11 +308,11 @@ export async function siteGenerationWorkflow(
       v0ProjectId: projectId,
     })
 
-    // Step 4: Deploy
-    const deploymentUrl = await deploySite(siteId, projectId, chatId, versionId)
+    // Step 4: Deploy and get Vercel project ID
+    const { deploymentUrl, vercelProjectId } = await deploySite(siteId, projectId, chatId, versionId)
 
-    // Step 5: Assign domain
-    const domain = await assignDomain(siteId, siteName, projectId)
+    // Step 5: Assign domain (using vercelProjectId now)
+    const domain = await assignDomain(siteId, siteName, vercelProjectId)
 
     // Mark complete
     const finalUrl = domain
@@ -305,6 +320,7 @@ export async function siteGenerationWorkflow(
       : deploymentUrl || previewUrl
     await updateSiteStatus(siteId, "complete", 6, {
       v0VersionId: versionId,
+      vercelProjectId: vercelProjectId || undefined,
       previewUrl: finalUrl,
       domain: domain || undefined,
     })

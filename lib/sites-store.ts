@@ -92,6 +92,7 @@ export async function updateSite(
       v0_chat_id = ${updates.v0ChatId ?? site.v0ChatId ?? null},
       v0_project_id = ${updates.v0ProjectId ?? site.v0ProjectId ?? null},
       v0_version_id = ${updates.v0VersionId ?? site.v0VersionId ?? null},
+      vercel_project_id = ${updates.vercelProjectId ?? site.vercelProjectId ?? null},
       preview_url = ${updates.previewUrl ?? site.previewUrl ?? null},
       domain = ${updates.domain ?? site.domain ?? null},
       updated_at = ${now}
@@ -143,6 +144,7 @@ function mapRowToSite(row: Record<string, unknown>): SiteRecord {
     v0ChatId: row.v0_chat_id as string | undefined,
     v0ProjectId: row.v0_project_id as string | undefined,
     v0VersionId: row.v0_version_id as string | undefined,
+    vercelProjectId: row.vercel_project_id as string | undefined,
     previewUrl: row.preview_url as string | undefined,
     domain: row.domain as string | undefined,
     createdAt: row.created_at as string,
