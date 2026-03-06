@@ -40,10 +40,12 @@ export async function POST(request: Request) {
 
     if (!vercelProjectId) {
       return NextResponse.json(
-        { error: "No project ID available. Complete site generation first." },
+        { error: "Site generation must complete before assigning a domain. Please wait for the site to finish generating." },
         { status: 400 }
       )
     }
+
+    console.log("[v0] domains: assigning domain to project", vercelProjectId)
 
     let domain: string
     let isCustomDomain = false
@@ -85,6 +87,8 @@ export async function POST(request: Request) {
     )
 
     const addDomainData = await addDomainResponse.json()
+    
+    console.log("[v0] domains: Vercel API response", addDomainResponse.status, JSON.stringify(addDomainData))
 
     if (!addDomainResponse.ok) {
       // Check for specific error codes
@@ -98,6 +102,12 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "You don't have permission to add this domain" },
           { status: 403 }
+        )
+      }
+      if (addDomainData.error?.code === "not_found") {
+        return NextResponse.json(
+          { error: "The v0 project could not be found. This may be because v0-generated projects require domain management through the v0 dashboard." },
+          { status: 404 }
         )
       }
       return NextResponse.json(
