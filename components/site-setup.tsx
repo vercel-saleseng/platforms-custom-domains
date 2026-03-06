@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Sparkles, Loader2 } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import { ImageUploader } from "@/components/image-uploader"
 import { PromptInput } from "@/components/prompt-input"
 import { GenerationStatus } from "@/components/generation-status"
@@ -15,9 +15,29 @@ interface SiteSetupProps {
 export function SiteSetup({ site, onSiteUpdated }: SiteSetupProps) {
   const [images, setImages] = useState<string[]>(site.imageUrls || [])
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isRetrying, setIsRetrying] = useState(false)
 
   const isDraft = site.status === "draft"
-  const isProcessing = !["draft", "complete", "error"].includes(site.status)
+  const isError = site.status === "error"
+
+  const startGeneration = useCallback(
+    async (prompt: string, imageUrls: string[], siteName: string) => {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: site.id,
+          prompt,
+          imageUrls,
+          siteName,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Generation failed")
+      onSiteUpdated()
+    },
+    [site.id, onSiteUpdated]
+  )
 
   const handleGenerate = useCallback(
     async (prompt: string) => {
@@ -25,33 +45,41 @@ export function SiteSetup({ site, onSiteUpdated }: SiteSetupProps) {
       setIsGenerating(true)
 
       try {
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            siteId: site.id,
-            prompt,
-            imageUrls: images,
-            siteName: prompt.split(" ").slice(0, 4).join(" ").substring(0, 30) || site.name,
-          }),
-        })
-
-        if (!response.ok) throw new Error("Generation failed")
-        onSiteUpdated()
+        const siteName = prompt.split(" ").slice(0, 4).join(" ").substring(0, 30) || site.name
+        await startGeneration(prompt, images, siteName)
       } catch (error) {
         console.error("Generation error:", error)
       } finally {
         setIsGenerating(false)
       }
     },
-    [images, site.id, site.name, onSiteUpdated]
+    [images, site.name, startGeneration]
   )
+
+  const handleRetry = useCallback(async () => {
+    // Use existing site data to retry
+    if (!site.prompt || site.imageUrls.length === 0) return
+    setIsRetrying(true)
+
+    try {
+      await startGeneration(site.prompt, site.imageUrls, site.name)
+    } catch (error) {
+      console.error("Retry error:", error)
+    } finally {
+      setIsRetrying(false)
+    }
+  }, [site.prompt, site.imageUrls, site.name, startGeneration])
 
   // Show generation progress if not draft
   if (!isDraft) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-6 md:py-12">
-        <GenerationStatus site={site} onReset={() => {}} hideResetButton />
+        <GenerationStatus 
+          site={site} 
+          onReset={() => {}} 
+          onRetry={isError ? handleRetry : undefined}
+          hideResetButton 
+        />
       </div>
     )
   }

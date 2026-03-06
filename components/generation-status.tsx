@@ -14,6 +14,7 @@ import type { SiteRecord } from "@/lib/types"
 interface GenerationStatusProps {
   site: SiteRecord
   onReset: () => void
+  onRetry?: () => void
   hideResetButton?: boolean
 }
 
@@ -40,7 +41,7 @@ function getStepState(
   return "pending"
 }
 
-export function GenerationStatus({ site, onReset, hideResetButton }: GenerationStatusProps) {
+export function GenerationStatus({ site, onReset, onRetry, hideResetButton }: GenerationStatusProps) {
   const isComplete = site.status === "complete"
   const isError = site.status === "error"
   const siteUrl = site.domain
@@ -128,9 +129,15 @@ export function GenerationStatus({ site, onReset, hideResetButton }: GenerationS
       </div>
 
       {/* Error message */}
-      {isError && site.error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <p className="text-sm text-destructive">{site.error}</p>
+      {isError && (
+        <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-sm text-destructive">{site.error || "An unexpected error occurred"}</p>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry} className="w-fit">
+              <RotateCcw className="mr-2 h-3.5 w-3.5" />
+              Retry Generation
+            </Button>
+          )}
         </div>
       )}
 
