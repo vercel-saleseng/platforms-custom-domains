@@ -1,21 +1,37 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { mutate } from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  Check, 
-  X, 
-  Loader2, 
-  Copy, 
-  ExternalLink,
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
   AlertCircle,
+  Check,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
   Globe,
-  RefreshCw
+  Loader2,
+  RefreshCw,
+  Save,
+  Trash2,
+  X,
 } from "lucide-react"
 import type { SiteRecord } from "@/lib/types"
 
@@ -46,7 +62,9 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+  const router = useRouter()
   const hasVercelProject = !!site.vercelProjectId
   const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
 
@@ -218,6 +236,31 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text)
   }, [])
+
+  const handleDeleteSite = async () => {
+    setIsDeleting(true)
+    setError(null)
+    
+    try {
+      const res = await fetch(`/api/sites/${site.id}`, {
+        method: "DELETE",
+      })
+      
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to delete site")
+      }
+      
+      // Invalidate the sites cache
+      mutate("/api/sites")
+      
+      // Redirect to home
+      router.push("/")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete site")
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -536,6 +579,61 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
               <dd>{new Date(site.updatedAt).toLocaleDateString()}</dd>
             </div>
           </dl>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-lg text-destructive">Danger Zone</CardTitle>
+          <CardDescription>
+            Irreversible actions that will permanently affect your site.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-medium">Delete this site</p>
+              <p className="text-sm text-muted-foreground">
+                Once deleted, all data associated with this site will be permanently removed.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isDeleting}>
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Site
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the site
+                    <span className="font-medium"> {site.name}</span> and remove all associated data.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteSite}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete Site
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
     </div>

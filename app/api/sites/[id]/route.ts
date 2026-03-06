@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSite, updateSite } from "@/lib/sites-store"
+import { getSite, updateSite, deleteSite } from "@/lib/sites-store"
 
 export const dynamic = "force-dynamic"
 
@@ -45,6 +45,28 @@ export async function PATCH(
     console.error("Error updating site:", error)
     return NextResponse.json(
       { error: "Failed to update site" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const deleted = await deleteSite(id)
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Site not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error deleting site:", error)
+    return NextResponse.json(
+      { error: "Failed to delete site" },
       { status: 500 }
     )
   }
