@@ -1,11 +1,37 @@
 "use client"
 
-import { useState } from "react"
-import { Globe, Loader2, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import {
+  Globe,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Copy,
+  RefreshCw,
+  XCircle,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { SiteRecord } from "@/lib/types"
+
+interface DnsRecord {
+  type: string
+  name: string
+  value: string
+  ttl: number
+}
+
+interface DomainResponse {
+  success?: boolean
+  domain?: string
+  isCustomDomain?: boolean
+  verified?: boolean
+  verification?: { type: string; domain: string; value: string }[] | null
+  dnsRecords?: DnsRecord[]
+  error?: string
+}
 
 interface SiteSettingsProps {
   site: SiteRecord
@@ -19,8 +45,85 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // Subdomain availability checking
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const [availabilityStatus, setAvailabilityStatus] = useState<{
+    available: boolean | null
+    message?: string
+  }>({ available: null })
+
+  // Custom domain verification state
+  const [pendingDomain, setPendingDomain] = useState<DomainResponse | null>(null)
+  const [isVerifying, setIsVerifying] = useState(false)
+
   const currentUrl = site.domain ? `https://${site.domain}` : site.previewUrl
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "example.com"
+
+  // Debounced subdomain availability check
+  const checkAvailability = useCallback(
+    async (value: string) => {
+      if (!value || value.length < 2) {
+        setAvailabilityStatus({ available: null })
+        return
+      }
+
+      setIsCheckingAvailability(true)
+      try {
+        const params = new URLSearchParams({ subdomain: value })
+        if (site.v0ProjectId) {
+          params.set("projectId", site.v0ProjectId)
+        }
+        const response = await fetch(`/api/domains/check?${params}`)
+        const data = await response.json()
+
+        if (data.error && !data.available) {
+          setAvailabilityStatus({
+            available: false,
+            message: data.error,
+          })
+        } else if (data.alreadyAssigned) {
+          setAvailabilityStatus({
+            available: true,
+            message: "Already assigned to this site",
+          })
+        } else if (data.available) {
+          setAvailabilityStatus({
+            available: true,
+            message: `${value}.vercel.zone is available`,
+          })
+        } else {
+          setAvailabilityStatus({
+            available: false,
+            message: data.error || "Not available",
+          })
+        }
+      } catch {
+        setAvailabilityStatus({ available: null })
+      } finally {
+        setIsCheckingAvailability(false)
+      }
+    },
+    [site.v0ProjectId]
+  )
+
+  // Debounce the availability check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (subdomain) {
+        checkAvailability(subdomain)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [subdomain, checkAvailability])
+
+  const handleSubdomainChange = (value: string) => {
+    const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+    setSubdomain(sanitized)
+    setError(null)
+    setSuccess(null)
+    if (!sanitized) {
+      setAvailabilityStatus({ available: null })
+    }
+  }
 
   const handleSubdomainSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,11 +140,11 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         body: JSON.stringify({
           siteId: site.id,
           projectId: site.v0ProjectId,
-          subdomain: subdomain.trim().toLowerCase(),
+          subdomain: subdomain.trim(),
         }),
       })
 
-      const data = await response.json()
+      const data: DomainResponse = await response.json()
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to assign domain")
@@ -49,6 +152,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
 
       setSuccess(`Domain assigned: ${data.domain}`)
       setSubdomain("")
+      setAvailabilityStatus({ available: null })
       onSiteUpdated()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign domain")
@@ -64,6 +168,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
     setIsSubmitting(true)
     setError(null)
     setSuccess(null)
+    setPendingDomain(null)
 
     try {
       const response = await fetch("/api/domains", {
@@ -72,24 +177,66 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         body: JSON.stringify({
           siteId: site.id,
           projectId: site.v0ProjectId,
-          customDomain: customDomain.trim().toLowerCase(),
+          customDomain: customDomain.trim(),
+        }),
+      })
+
+      const data: DomainResponse = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add domain")
+      }
+
+      if (data.isCustomDomain && !data.verified) {
+        // Show DNS configuration UI
+        setPendingDomain(data)
+      } else {
+        setSuccess(`Domain assigned: ${data.domain}`)
+        setCustomDomain("")
+        onSiteUpdated()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add domain")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleVerifyDomain = async () => {
+    if (!pendingDomain?.domain) return
+
+    setIsVerifying(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/domains/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: site.id,
+          domain: pendingDomain.domain,
         }),
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to assign domain")
+      if (data.verified) {
+        setSuccess(`Domain verified: ${pendingDomain.domain}`)
+        setPendingDomain(null)
+        setCustomDomain("")
+        onSiteUpdated()
+      } else {
+        setError(data.error || "Domain not verified yet. Please check your DNS configuration.")
       }
-
-      setSuccess(`Domain assigned: ${data.domain}`)
-      setCustomDomain("")
-      onSiteUpdated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign domain")
+      setError(err instanceof Error ? err.message : "Verification failed")
     } finally {
-      setIsSubmitting(false)
+      setIsVerifying(false)
     }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
   }
 
   return (
@@ -136,90 +283,208 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
           </div>
         )}
 
-        {/* Subdomain form */}
-        <form onSubmit={handleSubdomainSubmit} className="flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-medium text-foreground">Choose a subdomain</h3>
-            <p className="text-sm text-muted-foreground">
-              Get a free subdomain on {rootDomain}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="subdomain" className="sr-only">Subdomain</Label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Input
-                  id="subdomain"
-                  type="text"
-                  placeholder="my-awesome-site"
-                  value={subdomain}
-                  onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/gi, ""))}
-                  disabled={isSubmitting || !site.v0ProjectId}
-                  className="pr-32 text-base md:text-sm"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  .{rootDomain}
-                </span>
+        {/* Pending domain verification */}
+        {pendingDomain && (
+          <div className="flex flex-col gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium text-foreground">
+                  DNS Configuration Required
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Add the following DNS records to your domain provider to verify{" "}
+                  <span className="font-mono text-foreground">{pendingDomain.domain}</span>
+                </p>
               </div>
+            </div>
+
+            {/* DNS Records Table */}
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Type</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Value</th>
+                    <th className="px-3 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {pendingDomain.dnsRecords?.map((record, idx) => (
+                    <tr key={idx}>
+                      <td className="px-3 py-2 font-mono text-xs">{record.type}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{record.name}</td>
+                      <td className="px-3 py-2 font-mono text-xs truncate max-w-[150px]">
+                        {record.value}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={() => copyToClipboard(record.value)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center gap-2">
               <Button
-                type="submit"
-                disabled={!subdomain.trim() || isSubmitting || !site.v0ProjectId}
-                className="h-11 md:h-10 shrink-0"
+                onClick={handleVerifyDomain}
+                disabled={isVerifying}
+                className="flex-1 md:flex-none"
               >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {isVerifying ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  "Assign"
+                  <RefreshCw className="mr-2 h-4 w-4" />
                 )}
+                Verify Domain
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPendingDomain(null)}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Cancel
               </Button>
             </div>
           </div>
-        </form>
+        )}
+
+        {/* Subdomain form */}
+        {!pendingDomain && (
+          <form onSubmit={handleSubdomainSubmit} className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-base font-medium text-foreground">Choose a subdomain</h3>
+              <p className="text-sm text-muted-foreground">
+                Get a free subdomain on vercel.zone
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="subdomain" className="sr-only">
+                Subdomain
+              </Label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="subdomain"
+                      type="text"
+                      placeholder="my-awesome-site"
+                      value={subdomain}
+                      onChange={(e) => handleSubdomainChange(e.target.value)}
+                      disabled={isSubmitting || !site.v0ProjectId}
+                      className="pr-28 text-base md:text-sm"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      .vercel.zone
+                    </span>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !subdomain.trim() ||
+                      isSubmitting ||
+                      !site.v0ProjectId ||
+                      availabilityStatus.available === false
+                    }
+                    className="h-11 md:h-10 shrink-0"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Assign"
+                    )}
+                  </Button>
+                </div>
+
+                {/* Availability status */}
+                {subdomain && (
+                  <div className="flex items-center gap-2 text-sm">
+                    {isCheckingAvailability ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-muted-foreground">Checking availability...</span>
+                      </>
+                    ) : availabilityStatus.available === true ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-green-500">{availabilityStatus.message}</span>
+                      </>
+                    ) : availabilityStatus.available === false ? (
+                      <>
+                        <XCircle className="h-3.5 w-3.5 text-destructive" />
+                        <span className="text-destructive">{availabilityStatus.message}</span>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          </form>
+        )}
 
         {/* Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or</span>
-          </div>
-        </div>
-
-        {/* Custom domain form */}
-        <form onSubmit={handleCustomDomainSubmit} className="flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-medium text-foreground">Use a custom domain</h3>
-            <p className="text-sm text-muted-foreground">
-              Connect your own domain (requires DNS configuration)
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="customDomain" className="sr-only">Custom Domain</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="customDomain"
-                type="text"
-                placeholder="www.yoursite.com"
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                disabled={isSubmitting || !site.v0ProjectId}
-                className="flex-1 text-base md:text-sm"
-              />
-              <Button
-                type="submit"
-                disabled={!customDomain.trim() || isSubmitting || !site.v0ProjectId}
-                className="h-11 md:h-10 shrink-0"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Assign"
-                )}
-              </Button>
+        {!pendingDomain && (
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or</span>
             </div>
           </div>
-        </form>
+        )}
+
+        {/* Custom domain form */}
+        {!pendingDomain && (
+          <form onSubmit={handleCustomDomainSubmit} className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-base font-medium text-foreground">Use a custom domain</h3>
+              <p className="text-sm text-muted-foreground">
+                Connect your own domain (requires DNS configuration)
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="customDomain" className="sr-only">
+                Custom Domain
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="customDomain"
+                  type="text"
+                  placeholder="www.yoursite.com"
+                  value={customDomain}
+                  onChange={(e) => {
+                    setCustomDomain(e.target.value)
+                    setError(null)
+                    setSuccess(null)
+                  }}
+                  disabled={isSubmitting || !site.v0ProjectId}
+                  className="flex-1 text-base md:text-sm"
+                />
+                <Button
+                  type="submit"
+                  disabled={!customDomain.trim() || isSubmitting || !site.v0ProjectId}
+                  className="h-11 md:h-10 shrink-0"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Add"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
 
         {!site.v0ProjectId && (
           <p className="text-sm text-muted-foreground text-center">

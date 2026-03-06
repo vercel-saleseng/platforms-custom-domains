@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server"
 import { updateSite, getSite } from "@/lib/sites-store"
 
-// Note: Full domain management requires the Vercel API
-// This endpoint stores the desired domain in the database
-// For production, integrate with Vercel's domains API: 
-// https://vercel.com/docs/rest-api/endpoints/projects#add-a-domain-to-a-project
-
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { siteId, subdomain, customDomain } = body
+    const { siteId, projectId, subdomain, customDomain } = body
 
     if (!siteId) {
       return NextResponse.json(
@@ -33,8 +28,25 @@ export async function POST(request: Request) {
       )
     }
 
+    const vercelToken = process.env.VERCEL_API_TOKEN
+    const vercelProjectId = projectId || site.v0ProjectId
+
+    if (!vercelToken) {
+      return NextResponse.json(
+        { error: "VERCEL_API_TOKEN not configured" },
+        { status: 500 }
+      )
+    }
+
+    if (!vercelProjectId) {
+      return NextResponse.json(
+        { error: "No project ID available. Complete site generation first." },
+        { status: 400 }
+      )
+    }
+
     let domain: string
-    const rootDomain = process.env.ROOT_DOMAIN || "v0.site"
+    let isCustomDomain = false
 
     if (subdomain) {
       // Validate subdomain format
@@ -45,23 +57,90 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
-      domain = `${subdomain}.${rootDomain}`
+      domain = `${subdomain}.vercel.zone`
     } else {
       // Validate custom domain format
       const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/
-      if (!domainRegex.test(customDomain)) {
+      if (!domainRegex.test(customDomain.toLowerCase())) {
         return NextResponse.json(
           { error: "Invalid domain format" },
           { status: 400 }
         )
       }
-      domain = customDomain
+      domain = customDomain.toLowerCase()
+      isCustomDomain = true
+    }
+
+    // Add domain to Vercel project using the API
+    const addDomainResponse = await fetch(
+      `https://api.vercel.com/v10/projects/${vercelProjectId}/domains`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: domain }),
+      }
+    )
+
+    const addDomainData = await addDomainResponse.json()
+
+    if (!addDomainResponse.ok) {
+      // Check for specific error codes
+      if (addDomainData.error?.code === "domain_already_in_use") {
+        return NextResponse.json(
+          { error: "This domain is already in use by another project" },
+          { status: 409 }
+        )
+      }
+      if (addDomainData.error?.code === "forbidden") {
+        return NextResponse.json(
+          { error: "You don't have permission to add this domain" },
+          { status: 403 }
+        )
+      }
+      return NextResponse.json(
+        { error: addDomainData.error?.message || "Failed to add domain" },
+        { status: addDomainResponse.status }
+      )
     }
 
     // Update site record with new domain
     await updateSite(siteId, { domain })
 
-    return NextResponse.json({ domain, success: true })
+    // For custom domains, return verification info
+    if (isCustomDomain) {
+      return NextResponse.json({
+        success: true,
+        domain,
+        isCustomDomain: true,
+        verified: addDomainData.verified || false,
+        verification: addDomainData.verification || null,
+        // DNS records needed for configuration
+        dnsRecords: [
+          {
+            type: "A",
+            name: "@",
+            value: "76.76.21.21",
+            ttl: 3600,
+          },
+          {
+            type: "CNAME",
+            name: "www",
+            value: "cname.vercel-dns.com",
+            ttl: 3600,
+          },
+        ],
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      domain,
+      isCustomDomain: false,
+      verified: true,
+    })
   } catch (error) {
     console.error("Domain assignment error:", error)
     return NextResponse.json(
