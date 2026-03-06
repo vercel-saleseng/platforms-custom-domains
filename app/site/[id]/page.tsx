@@ -79,8 +79,11 @@ export default function SitePage({
 
   const handleSelectSite = useCallback(
     (siteId: string) => {
-      router.push(`/site/${siteId}`)
       if (isMobile) setSidebarOpen(false)
+      // Small delay to let sheet close animation start before navigation
+      setTimeout(() => {
+        router.push(`/site/${siteId}`)
+      }, 50)
     },
     [router, isMobile]
   )
