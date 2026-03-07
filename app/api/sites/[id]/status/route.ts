@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { getRun } from "workflow/api"
 import { getSite } from "@/lib/sites-store"
 
 export async function GET(
@@ -14,28 +13,14 @@ export async function GET(
       return NextResponse.json({ error: "Site not found" }, { status: 404 })
     }
 
-    // If there's a workflow run ID, get the run status
-    let workflowStatus = null
-    if (site.workflowRunId) {
-      try {
-        const run = getRun(site.workflowRunId)
-        const status = await run.status
-        const createdAt = await run.createdAt
-        
-        workflowStatus = {
-          runId: run.runId,
-          status,
-          createdAt: createdAt?.toISOString(),
-        }
-      } catch (error) {
-        // Workflow run might not exist anymore
-        console.error("Failed to get workflow run:", error)
-      }
-    }
-
+    // Return site with status info (compatible with both preview and production)
     return NextResponse.json({
       site,
-      workflowStatus,
+      workflowStatus: {
+        status: site.status === "complete" ? "completed" 
+          : site.status === "error" ? "failed"
+          : "running",
+      },
     })
   } catch (error) {
     console.error("Error fetching site status:", error)
