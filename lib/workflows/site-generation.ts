@@ -46,6 +46,7 @@ export async function siteGenerationWorkflow(
     // Step 3: Create v0 site and wait for generation
     const { chatId, projectId, versionId, previewUrl } = await createV0Site(
       siteId,
+      siteName,
       craftedPrompt,
       imageUrls
     )

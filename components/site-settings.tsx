@@ -359,21 +359,19 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                     <span>Your site is using the v0 preview URL</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Publish to Vercel to enable custom domains and subdomains.
+                    This site was created before Vercel integration was configured.
+                    Please regenerate the site to enable custom domains.
                   </p>
-                  <Button asChild className="w-full sm:w-auto">
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
                     <a
-                      href={`https://v0.dev/chat/${site.v0ChatId}?publish=true`}
+                      href={`https://v0.dev/chat/${site.v0ChatId}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <Rocket className="mr-2 h-4 w-4" />
-                      Publish to Vercel
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View in v0
                     </a>
                   </Button>
-                  <p className="text-xs text-muted-foreground">
-                    After publishing, return here and refresh to configure your domain.
-                  </p>
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">

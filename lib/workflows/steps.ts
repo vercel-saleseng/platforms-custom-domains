@@ -98,19 +98,30 @@ Generate an optimized v0 prompt that will create a stunning, personalized websit
 // Step 3: Create v0 chat and wait for generation
 export async function createV0Site(
   siteId: string,
+  siteName: string,
   craftedPrompt: string,
   imageUrls: string[]
 ): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
   await updateSiteStatus(siteId, "generating", 3)
 
-  // Create the chat
+  // First, create a v0 project linked to our Vercel project
+  // This ensures deployments will work
+  const vercelProjectId = process.env.VERCEL_PROJECT_ID
+  const project = await v0.projects.create({
+    name: siteName,
+    vercelProjectId: vercelProjectId || undefined,
+  })
+
+  const projectId = project.id
+
+  // Create the chat within the project
   const chat = await v0.chats.create({
     message: craftedPrompt,
+    projectId,
     attachments: imageUrls.map((url) => ({ url })),
   }) as ChatDetail
 
   const chatId = chat.id
-  const projectId = chat.projectId || ""
   let versionId = chat.latestVersion?.id || ""
   let previewUrl = chat.latestVersion?.demoUrl || ""
 
