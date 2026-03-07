@@ -341,20 +341,41 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
             <CardDescription>
               {isGenerating 
                 ? "Domain settings will be available after your site finishes generating."
-                : "Generate your site first to enable domain settings."}
+                : "Custom domains require the v0 project to be connected to Vercel."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
               {isGenerating ? (
-                <>
+                <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Generating site...</span>
-                </>
+                </div>
               ) : (
                 <>
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Complete site generation to configure domains</span>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Your site is using the v0 preview URL</span>
+                  </div>
+                  <p className="text-xs">
+                    To add a custom domain or subdomain, connect your v0 project to Vercel:
+                  </p>
+                  <ol className="list-decimal list-inside text-xs space-y-1 pl-1">
+                    <li>Open the v0 project in the v0 dashboard</li>
+                    <li>Click "Deploy" to connect to Vercel</li>
+                    <li>Return here to configure your domain</li>
+                  </ol>
+                  {site.v0ProjectId && (
+                    <a
+                      href={`https://v0.dev/chat/${site.v0ChatId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                    >
+                      Open in v0
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </>
               )}
             </div>
