@@ -1,5 +1,4 @@
-// Site generation step functions
-// These are called directly in preview mode, or via workflow runtime in production
+"use step"
 
 import { generateText } from "ai"
 import { v0 } from "../v0-client"
