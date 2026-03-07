@@ -163,25 +163,31 @@ export async function deploySite(
     return { deploymentUrl: "", vercelProjectId: "" }
   }
 
-  const deployment = await v0.deployments.create({
-    projectId,
-    chatId,
-    versionId,
-  })
-
-  // Fetch project to get Vercel project ID
+  let deploymentUrl = ""
   let vercelProjectId = ""
+
   try {
-    const projectDetails = await v0.projects.getById({ projectId })
-    vercelProjectId = projectDetails.vercelProjectId || ""
-  } catch {
-    // Ignore error, vercelProjectId will be empty
+    const deployment = await v0.deployments.create({
+      projectId,
+      chatId,
+      versionId,
+    })
+    deploymentUrl = deployment.webUrl || ""
+
+    // Fetch project to get Vercel project ID
+    try {
+      const projectDetails = await v0.projects.getById({ projectId })
+      vercelProjectId = projectDetails.vercelProjectId || ""
+    } catch {
+      // Ignore error, vercelProjectId will be empty
+    }
+  } catch (error) {
+    // Deployment failed (e.g., "Project has no Vercel project ID")
+    // Fall back gracefully - the workflow will use previewUrl instead
+    console.warn("Deployment failed, falling back to preview URL:", error)
   }
 
-  return {
-    deploymentUrl: deployment.webUrl || "",
-    vercelProjectId,
-  }
+  return { deploymentUrl, vercelProjectId }
 }
 
 // Step 5: Assign domain
