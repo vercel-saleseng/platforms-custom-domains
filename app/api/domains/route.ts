@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
 
     const vercelToken = process.env.VERCEL_API_TOKEN
-    const vercelProjectId = projectId || site.v0ProjectId
+    const vercelProjectId = projectId || site.vercelProjectId
 
     if (!vercelToken) {
       return NextResponse.json(

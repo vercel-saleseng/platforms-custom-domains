@@ -26,6 +26,8 @@ export interface SiteRecord {
   v0ChatId?: string
   v0ProjectId?: string
   v0VersionId?: string
+  vercelProjectId?: string
+  workflowRunId?: string
   deploymentUrl?: string
   domain?: string
   previewUrl?: string

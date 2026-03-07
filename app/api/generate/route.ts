@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
 import { nanoid } from "nanoid"
-import { createSite, getSite, updateSite, updateSiteStatus } from "@/lib/sites-store"
+import { start } from "workflow/api"
+import { createSite, getSite, updateSite } from "@/lib/sites-store"
 import type { GenerateRequest } from "@/lib/types"
-import { siteGenerationWorkflow } from "@/lib/workflow"
-
-export const maxDuration = 300
+import { siteGenerationWorkflow } from "@/lib/workflows/site-generation"
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +33,7 @@ export async function POST(request: Request) {
         name: siteName || existingSite.name,
         status: "queued",
         currentStep: 0,
+        error: undefined,
       })
     } else {
       // Create new site (backward compatible)
@@ -41,19 +41,28 @@ export async function POST(request: Request) {
       site = await createSite(finalSiteId, prompt, imageUrls, siteName)
     }
 
-    // Start the generation pipeline in the background (fire-and-forget)
-    siteGenerationWorkflow(finalSiteId!, prompt, imageUrls, site!.name).catch(
-      async (error) => {
-        console.error(`Workflow failed for site ${finalSiteId}:`, error)
-        await updateSiteStatus(finalSiteId!, "error", -1, {
-          error: error instanceof Error ? error.message : "Workflow failed",
-        })
-      }
-    )
+    // Start the durable workflow
+    const run = await start(siteGenerationWorkflow, [{ 
+      siteId: finalSiteId!, 
+      prompt, 
+      imageUrls,
+      siteName: site!.name,
+    }])
 
-    return NextResponse.json({ siteId: finalSiteId, site })
+    // Store the workflow run ID for status tracking
+    await updateSite(finalSiteId!, {
+      workflowRunId: run.runId,
+    })
+
+    console.log("[v0] generate: workflow started", { siteId: finalSiteId, runId: run.runId })
+
+    return NextResponse.json({
+      siteId: finalSiteId,
+      site,
+      workflowRunId: run.runId,
+    })
   } catch (error) {
-    console.error("Generate error:", error)
+    console.error("[v0] generate: error starting workflow:", error)
     return NextResponse.json(
       { error: "Failed to start site generation" },
       { status: 500 }

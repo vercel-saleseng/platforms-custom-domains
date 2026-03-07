@@ -52,8 +52,11 @@ export default function Home() {
 
   const handleSelectSite = useCallback(
     (id: string) => {
-      router.push(`/site/${id}`)
       if (isMobile) setSidebarOpen(false)
+      // Small delay to let sheet close animation start before navigation
+      setTimeout(() => {
+        router.push(`/site/${id}`)
+      }, 50)
     },
     [router, isMobile]
   )
@@ -151,8 +154,9 @@ export default function Home() {
                     {sites.slice(0, 3).map((site) => (
                       <button
                         key={site.id}
-                        onClick={() => handleSelectSite(site.id)}
-                        className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+                        type="button"
+                        onClick={() => router.push(`/site/${site.id}`)}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
                       >
                         {site.imageUrls[0] ? (
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border">
