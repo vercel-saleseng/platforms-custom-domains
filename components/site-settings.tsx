@@ -29,6 +29,7 @@ import {
   Globe,
   Loader2,
   RefreshCw,
+  Rocket,
   Save,
   Trash2,
   X,
@@ -63,6 +64,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isDeploying, setIsDeploying] = useState(false)
   
   const router = useRouter()
   const hasVercelProject = !!site.vercelProjectId
@@ -237,6 +239,30 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
     navigator.clipboard.writeText(text)
   }, [])
 
+  const handleDeployToVercel = async () => {
+    setIsDeploying(true)
+    setError(null)
+    
+    try {
+      const res = await fetch(`/api/sites/${site.id}/deploy`, {
+        method: "POST",
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Deployment failed")
+      }
+      
+      setSuccessMessage("Deployed to Vercel successfully! Domain settings are now available.")
+      onSiteUpdated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deployment failed")
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   const handleDeleteSite = async () => {
     setIsDeleting(true)
     setError(null)
@@ -341,42 +367,48 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
             <CardDescription>
               {isGenerating 
                 ? "Domain settings will be available after your site finishes generating."
-                : "Custom domains require the v0 project to be connected to Vercel."}
+                : "Deploy your site to Vercel to enable custom domains."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-4">
               {isGenerating ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Generating site...</span>
                 </div>
-              ) : (
+              ) : site.v0ProjectId && site.v0ChatId && site.v0VersionId ? (
                 <>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <AlertCircle className="h-4 w-4" />
                     <span>Your site is using the v0 preview URL</span>
                   </div>
-                  <p className="text-xs">
-                    To add a custom domain or subdomain, connect your v0 project to Vercel:
+                  <p className="text-sm text-muted-foreground">
+                    Deploy to Vercel to enable custom domains and subdomains.
                   </p>
-                  <ol className="list-decimal list-inside text-xs space-y-1 pl-1">
-                    <li>Open the v0 project in the v0 dashboard</li>
-                    <li>Click "Deploy" to connect to Vercel</li>
-                    <li>Return here to configure your domain</li>
-                  </ol>
-                  {site.v0ProjectId && (
-                    <a
-                      href={`https://v0.dev/chat/${site.v0ChatId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-                    >
-                      Open in v0
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+                  <Button
+                    onClick={handleDeployToVercel}
+                    disabled={isDeploying}
+                    className="w-full sm:w-auto"
+                  >
+                    {isDeploying ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deploying...
+                      </>
+                    ) : (
+                      <>
+                        <Rocket className="mr-2 h-4 w-4" />
+                        Deploy to Vercel
+                      </>
+                    )}
+                  </Button>
                 </>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Site generation incomplete. Please regenerate the site.</span>
+                </div>
               )}
             </div>
           </CardContent>
