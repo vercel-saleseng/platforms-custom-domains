@@ -104,12 +104,10 @@ export async function createV0Site(
 ): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
   await updateSiteStatus(siteId, "generating", 3)
 
-  // First, create a v0 project linked to our Vercel project
-  // This ensures deployments will work
-  const vercelProjectId = process.env.VERCEL_PROJECT_ID
+  // Create a new v0 project for this site
+  // Each site gets its own v0 project which will create its own Vercel project on deploy
   const project = await v0.projects.create({
     name: siteName,
-    vercelProjectId: vercelProjectId || undefined,
   })
 
   const projectId = project.id
