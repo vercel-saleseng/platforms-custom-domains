@@ -1,31 +1,9 @@
 import { NextResponse } from "next/server"
-import { del } from "@vercel/blob"
-import { getSite, updateSite, deleteSite } from "@/lib/sites-store"
+import { start } from "workflow/api"
+import { getSite, updateSite } from "@/lib/sites-store"
+import { siteDeletionWorkflow } from "@/lib/workflows/site-deletion"
 
 export const dynamic = "force-dynamic"
-
-// Helper to remove domain from Vercel project
-async function removeDomainFromVercel(
-  vercelProjectId: string,
-  domain: string
-): Promise<void> {
-  const vercelToken = process.env.VERCEL_API_TOKEN
-  if (!vercelToken || !vercelProjectId || !domain) return
-
-  try {
-    await fetch(
-      `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${domain}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${vercelToken}`,
-        },
-      }
-    )
-  } catch (error) {
-    console.warn(`Failed to remove domain ${domain}:`, error)
-  }
-}
 
 export async function GET(
   _request: Request,
@@ -86,39 +64,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Site not found" }, { status: 404 })
     }
 
-    // 1. Delete uploaded images from Blob storage
-    if (site.imageUrls && site.imageUrls.length > 0) {
-      try {
-        await del(site.imageUrls)
-      } catch (error) {
-        console.warn("Failed to delete blobs:", error)
-      }
-    }
+    // Start the deletion workflow
+    const run = await start(siteDeletionWorkflow, [{ siteId: id }])
 
-    // 2. Remove subdomain from Vercel
-    if (site.vercelProjectId && site.subdomain) {
-      const rootDomain = process.env.ROOT_DOMAIN || "vercel.zone"
-      const fullSubdomain = `${site.subdomain}.${rootDomain}`
-      await removeDomainFromVercel(site.vercelProjectId, fullSubdomain)
-    }
-
-    // 3. Remove custom domain from Vercel
-    if (site.vercelProjectId && site.customDomain) {
-      await removeDomainFromVercel(site.vercelProjectId, site.customDomain)
-    }
-
-    // 4. Delete from database
-    const deleted = await deleteSite(id)
-
-    if (!deleted) {
-      return NextResponse.json({ error: "Failed to delete site" }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, workflowRunId: run.runId })
   } catch (error) {
-    console.error("Error deleting site:", error)
+    console.error("Error starting site deletion:", error)
     return NextResponse.json(
-      { error: "Failed to delete site" },
+      { error: "Failed to start site deletion" },
       { status: 500 }
     )
   }
