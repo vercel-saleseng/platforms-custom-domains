@@ -201,6 +201,36 @@ export async function deploySite(
   return { deploymentUrl, vercelProjectId }
 }
 
+// Step 4b: Disable deployment protection so sites are publicly accessible
+export async function disableDeploymentProtection(
+  vercelProjectId: string
+): Promise<void> {
+  if (!vercelProjectId) return
+
+  const vercelToken = process.env.VERCEL_API_TOKEN
+  if (!vercelToken) return
+
+  try {
+    // Disable SSO/Vercel Authentication protection
+    await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ssoProtection: null, // Disable Vercel Authentication
+        }),
+      }
+    )
+  } catch (error) {
+    console.warn("Failed to disable deployment protection:", error)
+    // Non-fatal, continue anyway
+  }
+}
+
 // Step 5: Assign domain - auto-generates a unique subdomain
 export async function assignDomain(
   siteId: string,

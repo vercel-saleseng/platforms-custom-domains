@@ -6,6 +6,7 @@ import {
   buildPrompt,
   createV0Site,
   deploySite,
+  disableDeploymentProtection,
   assignDomain,
   markComplete,
 } from "./steps"
@@ -58,6 +59,9 @@ export async function siteGenerationWorkflow(
       chatId,
       versionId
     )
+
+    // Step 4b: Disable deployment protection so sites are publicly accessible
+    await disableDeploymentProtection(vercelProjectId)
 
     // Step 5: Assign domain (auto-generates unique subdomain)
     const { subdomain, fullDomain } = await assignDomain(siteId, siteName, vercelProjectId)
