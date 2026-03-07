@@ -42,15 +42,15 @@ export default function SitePage({
   )
   const sites = sitesData?.sites || []
 
-  // Fetch current site details
-  const { data: siteData, isLoading } = useSWR<{ site: SiteRecord }>(
-    `/api/sites/${id}`,
+  // Fetch current site details with workflow status
+  const { data: siteData, isLoading } = useSWR<{ site: SiteRecord; workflowStatus?: { status: string } }>(
+    `/api/sites/${id}/status`,
     fetcher,
     {
       refreshInterval: (data) => {
         const status = data?.site?.status
         if (status === "complete" || status === "error" || status === "draft") return 0
-        return 3000
+        return 2000 // Poll every 2 seconds while generating
       },
     }
   )
@@ -89,7 +89,7 @@ export default function SitePage({
   )
 
   const handleSiteUpdated = useCallback(() => {
-    mutate(`/api/sites/${id}`)
+    mutate(`/api/sites/${id}/status`)
     mutate("/api/sites")
   }, [id])
 
