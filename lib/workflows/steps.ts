@@ -201,24 +201,26 @@ export async function deploySite(
   return { deploymentUrl, vercelProjectId }
 }
 
-// Step 5: Assign domain
+// Step 5: Assign domain - auto-generates a unique subdomain
 export async function assignDomain(
   siteId: string,
   siteName: string,
   vercelProjectId: string
-): Promise<string> {
+): Promise<{ subdomain: string; fullDomain: string }> {
   await updateSiteStatus(siteId, "assigning-domain", 5)
 
-  const rootDomain = process.env.ROOT_DOMAIN
-  if (!rootDomain || !vercelProjectId) {
-    return ""
+  const rootDomain = process.env.ROOT_DOMAIN || "vercel.zone"
+  if (!vercelProjectId) {
+    return { subdomain: "", fullDomain: "" }
   }
 
+  // Generate a unique subdomain slug from site name + short ID
   const slug = siteName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-  const subdomain = `${slug}-${siteId.slice(0, 8)}.${rootDomain}`
+  const subdomain = `${slug}-${siteId.slice(0, 8)}`
+  const fullDomain = `${subdomain}.${rootDomain}`
 
   try {
     const response = await fetch(
@@ -229,17 +231,17 @@ export async function assignDomain(
           Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: subdomain }),
+        body: JSON.stringify({ name: fullDomain }),
       }
     )
 
     if (!response.ok) {
-      return ""
+      return { subdomain: "", fullDomain: "" }
     }
 
-    return subdomain
+    return { subdomain, fullDomain }
   } catch {
-    return ""
+    return { subdomain: "", fullDomain: "" }
   }
 }
 
@@ -250,14 +252,17 @@ export async function markComplete(
   vercelProjectId: string,
   previewUrl: string,
   deploymentUrl: string,
-  domain: string
+  subdomain: string,
+  fullDomain: string
 ): Promise<void> {
-  const finalUrl = domain ? `https://${domain}` : deploymentUrl || previewUrl
+  // Use the subdomain URL if available, otherwise fall back to deployment or preview URL
+  const finalUrl = fullDomain ? `https://${fullDomain}` : deploymentUrl || previewUrl
 
   await updateSiteStatus(siteId, "complete", 6, {
     v0VersionId: versionId,
     vercelProjectId: vercelProjectId || undefined,
     previewUrl: finalUrl,
-    domain: domain || undefined,
+    domain: fullDomain || undefined, // Keep for backward compatibility
+    subdomain: subdomain || undefined,
   })
 }

@@ -59,8 +59,8 @@ export async function siteGenerationWorkflow(
       versionId
     )
 
-    // Step 5: Assign domain
-    const domain = await assignDomain(siteId, siteName, vercelProjectId)
+    // Step 5: Assign domain (auto-generates unique subdomain)
+    const { subdomain, fullDomain } = await assignDomain(siteId, siteName, vercelProjectId)
 
     // Step 6: Mark complete
     await markComplete(
@@ -69,7 +69,8 @@ export async function siteGenerationWorkflow(
       vercelProjectId,
       previewUrl,
       deploymentUrl,
-      domain
+      subdomain,
+      fullDomain
     )
 
     return {
@@ -77,8 +78,8 @@ export async function siteGenerationWorkflow(
       chatId,
       projectId,
       versionId,
-      previewUrl: domain ? `https://${domain}` : deploymentUrl || previewUrl,
-      domain,
+      previewUrl: fullDomain ? `https://${fullDomain}` : deploymentUrl || previewUrl,
+      domain: fullDomain,
     }
   } catch (error) {
     const message =

@@ -29,7 +29,10 @@ export interface SiteRecord {
   vercelProjectId?: string
   workflowRunId?: string
   deploymentUrl?: string
-  domain?: string
+  domain?: string // deprecated - use subdomain/customDomain
+  subdomain?: string // e.g., "my-site-abc123" for "my-site-abc123.vercel.zone"
+  customDomain?: string // e.g., "example.com"
+  customDomainVerified?: boolean
   previewUrl?: string
   error?: string
 }
