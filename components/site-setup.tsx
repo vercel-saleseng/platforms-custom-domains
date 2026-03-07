@@ -78,6 +78,7 @@ export function SiteSetup({ site, onSiteUpdated }: SiteSetupProps) {
           site={site} 
           onReset={() => {}} 
           onRetry={isError ? handleRetry : undefined}
+          isRetrying={isRetrying}
           hideResetButton 
         />
       </div>
