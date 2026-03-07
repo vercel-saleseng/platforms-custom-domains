@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSiteById, updateSite } from "@/lib/sites-store"
+import { getSite, updateSite } from "@/lib/sites-store"
 import { v0 } from "@/lib/v0-client"
 
 export async function POST(
@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const site = await getSiteById(id)
+    const site = await getSite(id)
 
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 })
