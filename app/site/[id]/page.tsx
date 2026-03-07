@@ -126,6 +126,7 @@ export default function SitePage({
 
   const isDraft = site.status === "draft"
   const isGenerating = !["draft", "complete", "error"].includes(site.status)
+  const isSetupPhase = isDraft || isGenerating
   const hasPreview = !!site.previewUrl || !!site.domain
 
   return (
@@ -166,50 +167,47 @@ export default function SitePage({
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Content Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="flex flex-1 flex-col overflow-hidden"
-          >
-            <div className="border-b border-border px-4">
-              <TabsList className="h-12 w-full justify-start gap-4 rounded-none border-0 bg-transparent p-0">
-                <TabsTrigger
-                  value="setup"
-                  className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary"
-                >
-                  Setup
-                </TabsTrigger>
-                <TabsTrigger
-                  value="preview"
-                  disabled={isDraft && !isGenerating}
-                  className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary disabled:opacity-40"
-                >
-                  Preview
-                </TabsTrigger>
-                <TabsTrigger
-                  value="settings"
-                  disabled={isDraft}
-                  className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary disabled:opacity-40"
-                >
-                  Settings
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
+          {isSetupPhase ? (
+            // Setup phase: No tabs, just show the setup screen
             <div className="flex-1 overflow-y-auto">
-              <TabsContent value="setup" className="mt-0 h-full">
-                <SiteSetup site={site} onSiteUpdated={handleSiteUpdated} />
-              </TabsContent>
-              <TabsContent value="preview" className="mt-0 h-full">
-                <SitePreview site={site} />
-              </TabsContent>
-              <TabsContent value="settings" className="mt-0 h-full">
-                <SiteSettings site={site} onSiteUpdated={handleSiteUpdated} />
-              </TabsContent>
+              <SiteSetup site={site} onSiteUpdated={handleSiteUpdated} />
             </div>
-          </Tabs>
+          ) : (
+            // Post-setup: Show Preview and Settings tabs
+            <Tabs
+              value={activeTab === "setup" ? "preview" : activeTab}
+              onValueChange={setActiveTab}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
+              <div className="border-b border-border px-4">
+                <TabsList className="h-12 w-full justify-start gap-4 rounded-none border-0 bg-transparent p-0">
+                  <TabsTrigger
+                    value="preview"
+                    className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary"
+                  >
+                    Preview
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="settings"
+                    className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary"
+                  >
+                    Settings
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <TabsContent value="preview" className="mt-0 h-full">
+                  <SitePreview site={site} />
+                </TabsContent>
+                <TabsContent value="settings" className="mt-0 h-full">
+                  <SiteSettings site={site} onSiteUpdated={handleSiteUpdated} />
+                </TabsContent>
+              </div>
+            </Tabs>
+          )}
         </div>
       </main>
     </div>
