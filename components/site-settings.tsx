@@ -70,6 +70,16 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const hasVercelProject = !!site.vercelProjectId
   const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
 
+  console.log("[v0] SiteSettings rendering:", {
+    siteId: site.id,
+    hasVercelProject,
+    v0ProjectId: site.v0ProjectId,
+    v0ChatId: site.v0ChatId,
+    v0VersionId: site.v0VersionId,
+    status: site.status,
+    isGenerating,
+  })
+
   // Debounced subdomain availability check
   useEffect(() => {
     if (!subdomain || !hasVercelProject) {
