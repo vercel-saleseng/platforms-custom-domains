@@ -97,7 +97,7 @@ export async function updateSite(
       preview_url = ${updates.previewUrl ?? site.previewUrl ?? null},
       domain = ${updates.domain ?? site.domain ?? null},
       subdomain = ${updates.subdomain ?? site.subdomain ?? null},
-      custom_domain = ${updates.customDomain ?? site.customDomain ?? null},
+      custom_domain = ${'customDomain' in updates ? (updates.customDomain ?? null) : (site.customDomain ?? null)},
       custom_domain_verified = ${updates.customDomainVerified ?? site.customDomainVerified ?? false},
       updated_at = ${now}
     WHERE id = ${id}
