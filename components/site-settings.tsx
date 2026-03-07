@@ -64,21 +64,10 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isDeploying, setIsDeploying] = useState(false)
   
   const router = useRouter()
   const hasVercelProject = !!site.vercelProjectId
   const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
-
-  console.log("[v0] SiteSettings rendering:", {
-    siteId: site.id,
-    hasVercelProject,
-    v0ProjectId: site.v0ProjectId,
-    v0ChatId: site.v0ChatId,
-    v0VersionId: site.v0VersionId,
-    status: site.status,
-    isGenerating,
-  })
 
   // Debounced subdomain availability check
   useEffect(() => {
@@ -249,30 +238,6 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
     navigator.clipboard.writeText(text)
   }, [])
 
-  const handleDeployToVercel = async () => {
-    setIsDeploying(true)
-    setError(null)
-    
-    try {
-      const res = await fetch(`/api/sites/${site.id}/deploy`, {
-        method: "POST",
-      })
-      
-      const data = await res.json()
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Deployment failed")
-      }
-      
-      setSuccessMessage("Deployed to Vercel successfully! Domain settings are now available.")
-      onSiteUpdated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Deployment failed")
-    } finally {
-      setIsDeploying(false)
-    }
-  }
-
   const handleDeleteSite = async () => {
     setIsDeleting(true)
     setError(null)
@@ -387,32 +352,28 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Generating site...</span>
                 </div>
-              ) : site.v0ProjectId && site.v0ChatId && site.v0VersionId ? (
+              ) : site.v0ProjectId && site.v0ChatId ? (
                 <>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <AlertCircle className="h-4 w-4" />
                     <span>Your site is using the v0 preview URL</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Deploy to Vercel to enable custom domains and subdomains.
+                    Publish to Vercel to enable custom domains and subdomains.
                   </p>
-                  <Button
-                    onClick={handleDeployToVercel}
-                    disabled={isDeploying}
-                    className="w-full sm:w-auto"
-                  >
-                    {isDeploying ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deploying...
-                      </>
-                    ) : (
-                      <>
-                        <Rocket className="mr-2 h-4 w-4" />
-                        Deploy to Vercel
-                      </>
-                    )}
+                  <Button asChild className="w-full sm:w-auto">
+                    <a
+                      href={`https://v0.dev/chat/${site.v0ChatId}?publish=true`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Rocket className="mr-2 h-4 w-4" />
+                      Publish to Vercel
+                    </a>
                   </Button>
+                  <p className="text-xs text-muted-foreground">
+                    After publishing, return here and refresh to configure your domain.
+                  </p>
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
