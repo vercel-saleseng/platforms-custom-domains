@@ -92,6 +92,7 @@ export function SitePreview({ site }: SitePreviewProps) {
       {/* Preview iframe */}
       <div className="flex-1 bg-muted/30">
         <iframe
+          key={`${site.id}-${siteUrl}`}
           src={siteUrl}
           title={`Preview of ${site.name}`}
           className="h-full w-full"
