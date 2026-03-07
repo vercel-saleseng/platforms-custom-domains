@@ -55,7 +55,8 @@ export async function siteGenerationWorkflow(
       siteId,
       projectId,
       chatId,
-      versionId
+      versionId,
+      previewUrl
     )
 
     // Step 5: Assign domain

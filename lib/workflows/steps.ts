@@ -155,22 +155,32 @@ export async function deploySite(
   siteId: string,
   projectId: string,
   chatId: string,
-  versionId: string
+  versionId: string,
+  previewUrl: string
 ): Promise<{ deploymentUrl: string; vercelProjectId: string }> {
   await updateSiteStatus(siteId, "deploying", 4)
 
   if (!projectId || !chatId || !versionId) {
-    return { deploymentUrl: "", vercelProjectId: "" }
+    return { deploymentUrl: previewUrl, vercelProjectId: "" }
   }
 
-  const deployment = await v0.deployments.create({
-    projectId,
-    chatId,
-    versionId,
-  })
-
-  // Fetch project to get Vercel project ID
+  let deploymentUrl = previewUrl
   let vercelProjectId = ""
+
+  // Try to create a deployment - this may fail if project isn't connected to Vercel
+  try {
+    const deployment = await v0.deployments.create({
+      projectId,
+      chatId,
+      versionId,
+    })
+    deploymentUrl = deployment.webUrl || previewUrl
+  } catch (error) {
+    // If deployment fails (e.g., project not connected to Vercel), use preview URL
+    console.log("[v0] deploySite: deployment.create failed, using preview URL:", error)
+  }
+
+  // Try to fetch project to get Vercel project ID
   try {
     const projectDetails = await v0.projects.getById({ projectId })
     vercelProjectId = projectDetails.vercelProjectId || ""
@@ -179,7 +189,7 @@ export async function deploySite(
   }
 
   return {
-    deploymentUrl: deployment.webUrl || "",
+    deploymentUrl,
     vercelProjectId,
   }
 }
