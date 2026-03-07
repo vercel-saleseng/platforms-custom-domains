@@ -1,7 +1,11 @@
 "use workflow"
 
-import { del } from "@vercel/blob"
-import { getSite, deleteSite } from "../sites-store"
+import {
+  getSiteForDeletion,
+  deleteBlobs,
+  removeDomainFromVercel,
+  deleteSiteFromDb,
+} from "./steps"
 
 export interface SiteDeletionInput {
   siteId: string
@@ -12,48 +16,20 @@ export interface SiteDeletionOutput {
   siteId: string
 }
 
-// Helper to remove domain from Vercel project
-async function removeDomainFromVercel(
-  vercelProjectId: string,
-  domain: string
-): Promise<void> {
-  const vercelToken = process.env.VERCEL_API_TOKEN
-  if (!vercelToken || !vercelProjectId || !domain) return
-
-  try {
-    await fetch(
-      `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${domain}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${vercelToken}`,
-        },
-      }
-    )
-  } catch (error) {
-    console.warn(`Failed to remove domain ${domain}:`, error)
-  }
-}
-
 export async function siteDeletionWorkflow(
   input: SiteDeletionInput
 ): Promise<SiteDeletionOutput> {
   const { siteId } = input
 
   // Get site data first
-  const site = await getSite(siteId)
+  const site = await getSiteForDeletion(siteId)
   if (!site) {
     throw new Error("Site not found")
   }
 
   // Step 1: Delete uploaded images from Blob storage
   if (site.imageUrls && site.imageUrls.length > 0) {
-    try {
-      await del(site.imageUrls)
-    } catch (error) {
-      console.warn("Failed to delete blobs:", error)
-      // Continue anyway - blobs can be cleaned up later
-    }
+    await deleteBlobs(site.imageUrls)
   }
 
   // Step 2: Remove subdomain from Vercel
@@ -69,7 +45,7 @@ export async function siteDeletionWorkflow(
   }
 
   // Step 4: Delete from database
-  const deleted = await deleteSite(siteId)
+  const deleted = await deleteSiteFromDb(siteId)
   if (!deleted) {
     throw new Error("Failed to delete site from database")
   }

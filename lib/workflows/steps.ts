@@ -1,8 +1,9 @@
 "use step"
 
 import { generateText } from "ai"
+import { del } from "@vercel/blob"
 import { v0 } from "../v0-client"
-import { updateSiteStatus } from "../sites-store"
+import { updateSiteStatus, getSite, deleteSite } from "../sites-store"
 import type { ChatDetail } from "v0-sdk"
 
 // Step 1: Analyze images with AI vision
@@ -293,4 +294,52 @@ export async function markComplete(
     domain: fullDomain || undefined, // Keep for backward compatibility
     subdomain: subdomain || undefined,
   })
+}
+
+// ============ DELETION STEPS ============
+
+// Deletion Step 1: Delete blobs from storage
+export async function deleteBlobs(imageUrls: string[]): Promise<void> {
+  if (!imageUrls || imageUrls.length === 0) return
+  
+  try {
+    await del(imageUrls)
+  } catch (error) {
+    console.warn("Failed to delete blobs:", error)
+    // Non-fatal - continue with deletion
+  }
+}
+
+// Deletion Step 2: Remove domain from Vercel
+export async function removeDomainFromVercel(
+  vercelProjectId: string,
+  domain: string
+): Promise<void> {
+  const vercelToken = process.env.VERCEL_API_TOKEN
+  if (!vercelToken || !vercelProjectId || !domain) return
+
+  try {
+    await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${domain}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+        },
+      }
+    )
+  } catch (error) {
+    console.warn(`Failed to remove domain ${domain}:`, error)
+    // Non-fatal - continue with deletion
+  }
+}
+
+// Deletion Step 3: Delete site from database
+export async function deleteSiteFromDb(siteId: string): Promise<boolean> {
+  return await deleteSite(siteId)
+}
+
+// Deletion Step: Get site data (for workflow to access site info)
+export async function getSiteForDeletion(siteId: string) {
+  return await getSite(siteId)
 }
