@@ -29,6 +29,7 @@ import {
   Globe,
   Loader2,
   RefreshCw,
+  Rocket,
   Save,
   Trash2,
   X,
@@ -44,8 +45,8 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [name, setName] = useState(site.name)
   const [isSavingName, setIsSavingName] = useState(false)
   
-  // Subdomain state
-  const [subdomain, setSubdomain] = useState("")
+  // Subdomain state - initialize with saved subdomain
+  const [subdomain, setSubdomain] = useState(site.subdomain || "")
   const [subdomainStatus, setSubdomainStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
   const [isAssigningSubdomain, setIsAssigningSubdomain] = useState(false)
   
@@ -59,6 +60,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
     error?: string
   } | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [isRemovingCustomDomain, setIsRemovingCustomDomain] = useState(false)
   
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -237,6 +239,33 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
     navigator.clipboard.writeText(text)
   }, [])
 
+  const handleRemoveCustomDomain = async () => {
+    if (!site.customDomain) return
+    
+    setIsRemovingCustomDomain(true)
+    setError(null)
+    
+    try {
+      const res = await fetch(
+        `/api/domains?siteId=${site.id}&domain=${encodeURIComponent(site.customDomain)}`,
+        { method: "DELETE" }
+      )
+      
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to remove domain")
+      }
+      
+      setSuccessMessage("Custom domain removed successfully")
+      setCustomDomainResult(null)
+      onSiteUpdated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove domain")
+    } finally {
+      setIsRemovingCustomDomain(false)
+    }
+  }
+
   const handleDeleteSite = async () => {
     setIsDeleting(true)
     setError(null)
@@ -302,33 +331,94 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         </CardContent>
       </Card>
 
-      {/* Current Domain Card */}
-      {site.domain && (
+      {/* Current Domains Card */}
+      {(site.subdomain || site.customDomain) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              Current Domain
+              Active Domains
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
-                {site.domain}
-              </code>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => copyToClipboard(`https://${site.domain}`)}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" asChild>
-                <a href={`https://${site.domain}`} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            </div>
+          <CardContent className="space-y-4">
+            {/* Subdomain */}
+            {site.subdomain && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Subdomain</span>
+                  <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
+                    Active
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
+                    {site.subdomain}.vercel.zone
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(`https://${site.subdomain}.vercel.zone`)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <a href={`https://${site.subdomain}.vercel.zone`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Custom Domain */}
+            {site.customDomain && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Custom Domain</span>
+                  {site.customDomainVerified ? (
+                    <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Verified
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
+                      <AlertCircle className="h-3 w-3" />
+                      Pending Verification
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
+                    {site.customDomain}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(`https://${site.customDomain}`)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <a href={`https://${site.customDomain}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRemoveCustomDomain}
+                    disabled={isRemovingCustomDomain}
+                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  >
+                    {isRemovingCustomDomain ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -341,21 +431,42 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
             <CardDescription>
               {isGenerating 
                 ? "Domain settings will be available after your site finishes generating."
-                : "Generate your site first to enable domain settings."}
+                : "Deploy your site to Vercel to enable custom domains."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-4">
               {isGenerating ? (
-                <>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Generating site...</span>
+                </div>
+              ) : site.v0ProjectId && site.v0ChatId ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Your site is using the v0 preview URL</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    This site was created before Vercel integration was configured.
+                    Please regenerate the site to enable custom domains.
+                  </p>
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <a
+                      href={`https://v0.dev/chat/${site.v0ChatId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View in v0
+                    </a>
+                  </Button>
                 </>
               ) : (
-                <>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <AlertCircle className="h-4 w-4" />
-                  <span>Complete site generation to configure domains</span>
-                </>
+                  <span>Site generation incomplete. Please regenerate the site.</span>
+                </div>
               )}
             </div>
           </CardContent>

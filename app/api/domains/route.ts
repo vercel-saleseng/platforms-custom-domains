@@ -116,8 +116,21 @@ export async function POST(request: Request) {
       )
     }
 
-    // Update site record with new domain
-    await updateSite(siteId, { domain })
+    // Update site record with subdomain or custom domain (separately)
+    if (isCustomDomain) {
+      // Custom domain - don't overwrite subdomain, set customDomain and mark as unverified
+      await updateSite(siteId, { 
+        customDomain: domain,
+        customDomainVerified: false,
+      })
+    } else {
+      // Subdomain - update subdomain field and domain for backward compat
+      const subdomainSlug = subdomain // Just the slug, not the full domain
+      await updateSite(siteId, { 
+        subdomain: subdomainSlug,
+        domain, // Keep full domain for backward compat
+      })
+    }
 
     // For custom domains, return verification info
     if (isCustomDomain) {
@@ -155,6 +168,80 @@ export async function POST(request: Request) {
     console.error("Domain assignment error:", error)
     return NextResponse.json(
       { error: "Failed to assign domain" },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE handler to remove custom domain
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const siteId = searchParams.get("siteId")
+    const domain = searchParams.get("domain")
+
+    if (!siteId || !domain) {
+      return NextResponse.json(
+        { error: "siteId and domain are required" },
+        { status: 400 }
+      )
+    }
+
+    const site = await getSite(siteId)
+    if (!site) {
+      return NextResponse.json(
+        { error: "Site not found" },
+        { status: 404 }
+      )
+    }
+
+    const vercelToken = process.env.VERCEL_API_TOKEN
+    const vercelProjectId = site.vercelProjectId
+
+    if (!vercelToken) {
+      return NextResponse.json(
+        { error: "VERCEL_API_TOKEN not configured" },
+        { status: 500 }
+      )
+    }
+
+    if (!vercelProjectId) {
+      return NextResponse.json(
+        { error: "No Vercel project ID available" },
+        { status: 400 }
+      )
+    }
+
+    // Remove domain from Vercel project
+    const removeDomainResponse = await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${domain}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+        },
+      }
+    )
+
+    if (!removeDomainResponse.ok && removeDomainResponse.status !== 404) {
+      const errorData = await removeDomainResponse.json()
+      return NextResponse.json(
+        { error: errorData.error?.message || "Failed to remove domain from Vercel" },
+        { status: removeDomainResponse.status }
+      )
+    }
+
+    // Clear the custom domain from the site record
+    await updateSite(siteId, { 
+      customDomain: undefined,
+      customDomainVerified: false,
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Domain removal error:", error)
+    return NextResponse.json(
+      { error: "Failed to remove domain" },
       { status: 500 }
     )
   }

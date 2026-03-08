@@ -1,8 +1,9 @@
 "use step"
 
 import { generateText } from "ai"
+import { del } from "@vercel/blob"
 import { v0 } from "../v0-client"
-import { updateSiteStatus } from "../sites-store"
+import { updateSiteStatus, getSite, deleteSite } from "../sites-store"
 import type { ChatDetail } from "v0-sdk"
 
 // Step 1: Analyze images with AI vision
@@ -98,19 +99,28 @@ Generate an optimized v0 prompt that will create a stunning, personalized websit
 // Step 3: Create v0 chat and wait for generation
 export async function createV0Site(
   siteId: string,
+  siteName: string,
   craftedPrompt: string,
   imageUrls: string[]
 ): Promise<{ chatId: string; projectId: string; versionId: string; previewUrl: string }> {
   await updateSiteStatus(siteId, "generating", 3)
 
-  // Create the chat
+  // Create a new v0 project for this site
+  // Each site gets its own v0 project which will create its own Vercel project on deploy
+  const project = await v0.projects.create({
+    name: siteName,
+  })
+
+  const projectId = project.id
+
+  // Create the chat within the project
   const chat = await v0.chats.create({
     message: craftedPrompt,
+    projectId,
     attachments: imageUrls.map((url) => ({ url })),
   }) as ChatDetail
 
   const chatId = chat.id
-  const projectId = chat.projectId || ""
   let versionId = chat.latestVersion?.id || ""
   let previewUrl = chat.latestVersion?.demoUrl || ""
 
@@ -163,45 +173,83 @@ export async function deploySite(
     return { deploymentUrl: "", vercelProjectId: "" }
   }
 
-  const deployment = await v0.deployments.create({
-    projectId,
-    chatId,
-    versionId,
-  })
-
-  // Fetch project to get Vercel project ID
+  let deploymentUrl = ""
   let vercelProjectId = ""
+
   try {
-    const projectDetails = await v0.projects.getById({ projectId })
-    vercelProjectId = projectDetails.vercelProjectId || ""
-  } catch {
-    // Ignore error, vercelProjectId will be empty
+    const deployment = await v0.deployments.create({
+      projectId,
+      chatId,
+      versionId,
+    })
+    deploymentUrl = deployment.webUrl || ""
+
+    // Fetch project to get Vercel project ID
+    try {
+      const projectDetails = await v0.projects.getById({ projectId })
+      vercelProjectId = projectDetails.vercelProjectId || ""
+    } catch {
+      // Ignore error, vercelProjectId will be empty
+    }
+  } catch (error) {
+    // Deployment failed (e.g., "Project has no Vercel project ID")
+    // Fall back gracefully - the workflow will use previewUrl instead
+    console.warn("Deployment failed, falling back to preview URL:", error)
   }
 
-  return {
-    deploymentUrl: deployment.webUrl || "",
-    vercelProjectId,
+  return { deploymentUrl, vercelProjectId }
+}
+
+// Step 4b: Disable deployment protection so sites are publicly accessible
+export async function disableDeploymentProtection(
+  vercelProjectId: string
+): Promise<void> {
+  if (!vercelProjectId) return
+
+  const vercelToken = process.env.VERCEL_API_TOKEN
+  if (!vercelToken) return
+
+  try {
+    // Disable SSO/Vercel Authentication protection
+    await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ssoProtection: null, // Disable Vercel Authentication
+        }),
+      }
+    )
+  } catch (error) {
+    console.warn("Failed to disable deployment protection:", error)
+    // Non-fatal, continue anyway
   }
 }
 
-// Step 5: Assign domain
+// Step 5: Assign domain - auto-generates a unique subdomain
 export async function assignDomain(
   siteId: string,
   siteName: string,
   vercelProjectId: string
-): Promise<string> {
+): Promise<{ subdomain: string; fullDomain: string }> {
   await updateSiteStatus(siteId, "assigning-domain", 5)
 
-  const rootDomain = process.env.ROOT_DOMAIN
-  if (!rootDomain || !vercelProjectId) {
-    return ""
+  const rootDomain = process.env.ROOT_DOMAIN || "vercel.zone"
+  if (!vercelProjectId) {
+    return { subdomain: "", fullDomain: "" }
   }
 
+  // Generate a unique subdomain slug from site name + short ID
   const slug = siteName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-  const subdomain = `${slug}-${siteId.slice(0, 8)}.${rootDomain}`
+  const subdomain = `${slug}-${siteId.slice(0, 8)}`
+  const fullDomain = `${subdomain}.${rootDomain}`
 
   try {
     const response = await fetch(
@@ -212,17 +260,17 @@ export async function assignDomain(
           Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: subdomain }),
+        body: JSON.stringify({ name: fullDomain }),
       }
     )
 
     if (!response.ok) {
-      return ""
+      return { subdomain: "", fullDomain: "" }
     }
 
-    return subdomain
+    return { subdomain, fullDomain }
   } catch {
-    return ""
+    return { subdomain: "", fullDomain: "" }
   }
 }
 
@@ -233,14 +281,65 @@ export async function markComplete(
   vercelProjectId: string,
   previewUrl: string,
   deploymentUrl: string,
-  domain: string
+  subdomain: string,
+  fullDomain: string
 ): Promise<void> {
-  const finalUrl = domain ? `https://${domain}` : deploymentUrl || previewUrl
+  // Use the subdomain URL if available, otherwise fall back to deployment or preview URL
+  const finalUrl = fullDomain ? `https://${fullDomain}` : deploymentUrl || previewUrl
 
   await updateSiteStatus(siteId, "complete", 6, {
     v0VersionId: versionId,
     vercelProjectId: vercelProjectId || undefined,
     previewUrl: finalUrl,
-    domain: domain || undefined,
+    domain: fullDomain || undefined, // Keep for backward compatibility
+    subdomain: subdomain || undefined,
   })
+}
+
+// ============ DELETION STEPS ============
+
+// Deletion Step 1: Delete blobs from storage
+export async function deleteBlobs(imageUrls: string[]): Promise<void> {
+  if (!imageUrls || imageUrls.length === 0) return
+  
+  try {
+    await del(imageUrls)
+  } catch (error) {
+    console.warn("Failed to delete blobs:", error)
+    // Non-fatal - continue with deletion
+  }
+}
+
+// Deletion Step 2: Remove domain from Vercel
+export async function removeDomainFromVercel(
+  vercelProjectId: string,
+  domain: string
+): Promise<void> {
+  const vercelToken = process.env.VERCEL_API_TOKEN
+  if (!vercelToken || !vercelProjectId || !domain) return
+
+  try {
+    await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${domain}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+        },
+      }
+    )
+  } catch (error) {
+    console.warn(`Failed to remove domain ${domain}:`, error)
+    // Non-fatal - continue with deletion
+  }
+}
+
+// Deletion Step 3: Delete site from database
+export async function deleteSiteFromDb(siteId: string): Promise<boolean> {
+  return await deleteSite(siteId)
+}
+
+// Deletion Step: Get site data (for workflow to access site info)
+export async function getSiteForDeletion(siteId: string) {
+  return await getSite(siteId)
 }

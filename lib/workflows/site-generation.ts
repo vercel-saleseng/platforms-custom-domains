@@ -6,6 +6,7 @@ import {
   buildPrompt,
   createV0Site,
   deploySite,
+  disableDeploymentProtection,
   assignDomain,
   markComplete,
 } from "./steps"
@@ -46,6 +47,7 @@ export async function siteGenerationWorkflow(
     // Step 3: Create v0 site and wait for generation
     const { chatId, projectId, versionId, previewUrl } = await createV0Site(
       siteId,
+      siteName,
       craftedPrompt,
       imageUrls
     )
@@ -58,8 +60,11 @@ export async function siteGenerationWorkflow(
       versionId
     )
 
-    // Step 5: Assign domain
-    const domain = await assignDomain(siteId, siteName, vercelProjectId)
+    // Step 4b: Disable deployment protection so sites are publicly accessible
+    await disableDeploymentProtection(vercelProjectId)
+
+    // Step 5: Assign domain (auto-generates unique subdomain)
+    const { subdomain, fullDomain } = await assignDomain(siteId, siteName, vercelProjectId)
 
     // Step 6: Mark complete
     await markComplete(
@@ -68,7 +73,8 @@ export async function siteGenerationWorkflow(
       vercelProjectId,
       previewUrl,
       deploymentUrl,
-      domain
+      subdomain,
+      fullDomain
     )
 
     return {
@@ -76,8 +82,8 @@ export async function siteGenerationWorkflow(
       chatId,
       projectId,
       versionId,
-      previewUrl: domain ? `https://${domain}` : deploymentUrl || previewUrl,
-      domain,
+      previewUrl: fullDomain ? `https://${fullDomain}` : deploymentUrl || previewUrl,
+      domain: fullDomain,
     }
   } catch (error) {
     const message =

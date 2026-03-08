@@ -9,7 +9,21 @@ interface SitePreviewProps {
 }
 
 export function SitePreview({ site }: SitePreviewProps) {
-  const siteUrl = site.domain ? `https://${site.domain}` : site.previewUrl
+  // Priority: verified custom domain > subdomain > legacy domain > preview URL
+  // Only use custom domain if it's verified
+  const getSiteUrl = () => {
+    if (site.customDomain && site.customDomainVerified) {
+      return `https://${site.customDomain}`
+    }
+    if (site.subdomain) {
+      return `https://${site.subdomain}.vercel.zone`
+    }
+    if (site.domain) {
+      return `https://${site.domain}`
+    }
+    return site.previewUrl
+  }
+  const siteUrl = getSiteUrl()
   const isGenerating = !["draft", "complete", "error"].includes(site.status)
   const isComplete = site.status === "complete"
   const isError = site.status === "error"
@@ -78,6 +92,7 @@ export function SitePreview({ site }: SitePreviewProps) {
       {/* Preview iframe */}
       <div className="flex-1 bg-muted/30">
         <iframe
+          key={`${site.id}-${siteUrl}`}
           src={siteUrl}
           title={`Preview of ${site.name}`}
           className="h-full w-full"

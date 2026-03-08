@@ -96,6 +96,9 @@ export async function updateSite(
       workflow_run_id = ${updates.workflowRunId ?? site.workflowRunId ?? null},
       preview_url = ${updates.previewUrl ?? site.previewUrl ?? null},
       domain = ${updates.domain ?? site.domain ?? null},
+      subdomain = ${updates.subdomain ?? site.subdomain ?? null},
+      custom_domain = ${'customDomain' in updates ? (updates.customDomain ?? null) : (site.customDomain ?? null)},
+      custom_domain_verified = ${updates.customDomainVerified ?? site.customDomainVerified ?? false},
       updated_at = ${now}
     WHERE id = ${id}
   `
@@ -149,6 +152,9 @@ function mapRowToSite(row: Record<string, unknown>): SiteRecord {
     workflowRunId: row.workflow_run_id as string | undefined,
     previewUrl: row.preview_url as string | undefined,
     domain: row.domain as string | undefined,
+    subdomain: row.subdomain as string | undefined,
+    customDomain: row.custom_domain as string | undefined,
+    customDomainVerified: row.custom_domain_verified as boolean | undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }

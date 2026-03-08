@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSite } from "@/lib/sites-store"
+import { getSite, updateSite } from "@/lib/sites-store"
 
 export async function POST(request: Request) {
   try {
@@ -59,8 +59,15 @@ export async function POST(request: Request) {
       })
     }
 
+    const isVerified = verifyData.verified || false
+
+    // Update the site's custom domain verification status if verified
+    if (isVerified && site.customDomain === domain) {
+      await updateSite(siteId, { customDomainVerified: true })
+    }
+
     return NextResponse.json({
-      verified: verifyData.verified || false,
+      verified: isVerified,
       verification: verifyData.verification || null,
     })
   } catch (error) {

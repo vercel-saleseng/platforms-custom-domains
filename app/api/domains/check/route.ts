@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Try to get the domain to see if it exists on any project
+    // First check if domain is already on this project
     const checkResponse = await fetch(
       `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
       {
@@ -65,27 +65,68 @@ export async function GET(request: Request) {
       })
     }
 
-    if (checkResponse.status === 404) {
-      // Domain not on this project - check if it's available globally
-      // We can try to add it temporarily to check
+    // Try to add the domain to check true availability
+    // This is the only reliable way to check if a domain is taken globally
+    const addResponse = await fetch(
+      `https://api.vercel.com/v10/projects/${projectId}/domains`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: domain }),
+      }
+    )
+
+    if (addResponse.ok) {
+      // Domain was added successfully - it's available!
+      // Now remove it immediately since this is just a check
+      await fetch(
+        `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${vercelToken}`,
+          },
+        }
+      )
+      
       return NextResponse.json({
         available: true,
         domain,
       })
     }
 
-    // Domain might be taken by another project
+    // Check the error to see if it's taken
+    const errorData = await addResponse.json()
+    const errorCode = errorData.error?.code
+    const errorMessage = errorData.error?.message || ""
+
+    // Domain is taken by another project
+    if (errorCode === "domain_already_in_use" || 
+        errorCode === "forbidden" ||
+        errorMessage.includes("already") ||
+        errorMessage.includes("in use")) {
+      return NextResponse.json({
+        available: false,
+        domain,
+        error: "This subdomain is already taken",
+      })
+    }
+
+    // Some other error
     return NextResponse.json({
       available: false,
       domain,
-      error: "This subdomain may already be in use",
+      error: errorData.error?.message || "Could not verify availability",
     })
   } catch (error) {
     console.error("Domain check error:", error)
     return NextResponse.json({
-      available: true,
+      available: false,
       domain,
-      note: "Could not verify availability",
+      error: "Could not verify availability",
     })
   }
 }

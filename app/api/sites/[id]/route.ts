@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
-import { getSite, updateSite, deleteSite } from "@/lib/sites-store"
+import { start } from "workflow/api"
+import { getSite, updateSite } from "@/lib/sites-store"
+import { siteDeletionWorkflow } from "@/lib/workflows/site-deletion"
 
 export const dynamic = "force-dynamic"
 
@@ -56,17 +58,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const deleted = await deleteSite(id)
+    const site = await getSite(id)
 
-    if (!deleted) {
+    if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true })
+    // Start the deletion workflow
+    const run = await start(siteDeletionWorkflow, [{ siteId: id }])
+
+    return NextResponse.json({ success: true, workflowRunId: run.runId })
   } catch (error) {
-    console.error("Error deleting site:", error)
+    console.error("Error starting site deletion:", error)
     return NextResponse.json(
-      { error: "Failed to delete site" },
+      { error: "Failed to start site deletion" },
       { status: 500 }
     )
   }
