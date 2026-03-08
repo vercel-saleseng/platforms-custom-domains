@@ -4,6 +4,7 @@ import {
   getSiteForDeletion,
   deleteBlobs,
   removeDomainFromVercel,
+  deleteVercelProject,
   deleteSiteFromDb,
 } from "./steps"
 
@@ -44,7 +45,12 @@ export async function siteDeletionWorkflow(
     await removeDomainFromVercel(site.vercelProjectId, site.customDomain)
   }
 
-  // Step 4: Delete from database
+  // Step 4: Delete the Vercel project itself
+  if (site.vercelProjectId) {
+    await deleteVercelProject(site.vercelProjectId)
+  }
+
+  // Step 5: Delete from database
   const deleted = await deleteSiteFromDb(siteId)
   if (!deleted) {
     throw new Error("Failed to delete site from database")

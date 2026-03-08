@@ -334,7 +334,32 @@ export async function removeDomainFromVercel(
   }
 }
 
-// Deletion Step 3: Delete site from database
+// Deletion Step 3: Delete Vercel project
+export async function deleteVercelProject(vercelProjectId: string): Promise<void> {
+  const vercelToken = process.env.VERCEL_API_TOKEN
+  if (!vercelToken || !vercelProjectId) return
+
+  try {
+    const response = await fetch(
+      `https://api.vercel.com/v9/projects/${vercelProjectId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+        },
+      }
+    )
+    
+    if (!response.ok && response.status !== 404) {
+      console.warn(`Failed to delete Vercel project ${vercelProjectId}: ${response.status}`)
+    }
+  } catch (error) {
+    console.warn(`Failed to delete Vercel project ${vercelProjectId}:`, error)
+    // Non-fatal - continue with deletion
+  }
+}
+
+// Deletion Step 4: Delete site from database
 export async function deleteSiteFromDb(siteId: string): Promise<boolean> {
   return await deleteSite(siteId)
 }
