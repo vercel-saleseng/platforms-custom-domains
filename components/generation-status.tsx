@@ -7,6 +7,7 @@ import {
   XCircle,
   ExternalLink,
   RotateCcw,
+  PartyPopper,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { SiteRecord } from "@/lib/types"
@@ -50,23 +51,40 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
     : site.previewUrl || site.deploymentUrl
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8 animate-fade-up">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-foreground text-balance md:text-lg">
-            {isComplete
-              ? "Your site is ready!"
-              : isError
-                ? "Something went wrong"
-                : "Generating your site..."}
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {site.name}
-          </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="flex items-start gap-4">
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+            isComplete 
+              ? "bg-success/10 text-success" 
+              : isError 
+                ? "bg-destructive/10 text-destructive"
+                : "bg-primary/10 text-primary"
+          }`}>
+            {isComplete ? (
+              <PartyPopper className="h-6 w-6" />
+            ) : isError ? (
+              <XCircle className="h-6 w-6" />
+            ) : (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            )}
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground text-balance">
+              {isComplete
+                ? "Your site is ready!"
+                : isError
+                  ? "Something went wrong"
+                  : "Generating your site..."}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {site.name}
+            </p>
+          </div>
         </div>
         {(isComplete || isError) && !hideResetButton && (
-          <Button variant="outline" size="sm" onClick={onReset}>
+          <Button variant="outline" size="sm" onClick={onReset} className="shrink-0 hover:bg-accent/50">
             <RotateCcw className="mr-2 h-3.5 w-3.5" />
             New Site
           </Button>
@@ -74,41 +92,53 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
       </div>
 
       {/* Steps */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col">
         {WORKFLOW_STEPS.map((ws, index) => {
           const state = getStepState(ws.step, site.currentStep, site.status)
           return (
-            <div key={ws.step} className="flex items-start gap-3">
+            <div 
+              key={ws.step} 
+              className={`flex items-start gap-4 animate-fade-up`}
+              style={{ animationDelay: `${index * 0.05}s` }}
+            >
               {/* Step indicator line */}
               <div className="flex flex-col items-center">
-                <div className="flex h-6 w-6 items-center justify-center">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                  state === "done" 
+                    ? "border-success bg-success/10" 
+                    : state === "active"
+                      ? "border-primary bg-primary/10 animate-progress-pulse"
+                      : state === "error"
+                        ? "border-destructive bg-destructive/10"
+                        : "border-border/50 bg-muted/30"
+                }`}>
                   {state === "done" && (
-                    <CheckCircle2 className="h-5 w-5 text-success" />
+                    <CheckCircle2 className="h-4 w-4 text-success" />
                   )}
                   {state === "active" && (
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   )}
                   {state === "pending" && (
-                    <Circle className="h-5 w-5 text-muted-foreground/30" />
+                    <Circle className="h-3 w-3 text-muted-foreground/30" />
                   )}
                   {state === "error" && (
-                    <XCircle className="h-5 w-5 text-destructive" />
+                    <XCircle className="h-4 w-4 text-destructive" />
                   )}
                 </div>
                 {index < WORKFLOW_STEPS.length - 1 && (
                   <div
-                    className={`h-6 w-px ${
+                    className={`w-0.5 h-8 rounded-full transition-colors duration-300 ${
                       state === "done"
-                        ? "bg-success/40"
-                        : "bg-border"
+                        ? "bg-success/30"
+                        : "bg-border/50"
                     }`}
                   />
                 )}
               </div>
               {/* Step content */}
-              <div className="flex flex-col pb-4">
+              <div className="flex flex-col pb-6 pt-1">
                 <span
-                  className={`text-sm font-medium ${
+                  className={`text-sm font-medium transition-colors ${
                     state === "done"
                       ? "text-foreground"
                       : state === "active"
@@ -120,7 +150,7 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
                 >
                   {ws.label}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground mt-0.5">
                   {ws.description}
                 </span>
               </div>
@@ -131,10 +161,16 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
 
       {/* Error message */}
       {isError && (
-        <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <p className="text-sm text-destructive">{site.error || "An unexpected error occurred"}</p>
+        <div className="flex flex-col gap-4 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 animate-scale-in">
+          <p className="text-sm text-destructive font-medium">{site.error || "An unexpected error occurred"}</p>
           {onRetry && (
-            <Button variant="outline" size="sm" onClick={onRetry} disabled={isRetrying} className="w-fit">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onRetry} 
+              disabled={isRetrying} 
+              className="w-fit border-destructive/30 hover:bg-destructive/10"
+            >
               {isRetrying ? (
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -148,25 +184,40 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
 
       {/* Success - Site Preview */}
       {isComplete && siteUrl && (
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-3 md:p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <p className="text-sm font-medium text-foreground">Site URL</p>
-              <p className="truncate text-xs text-muted-foreground">{siteUrl}</p>
+        <div className="flex flex-col gap-5 rounded-2xl border border-success/20 bg-card/50 p-5 animate-scale-in">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-1 min-w-0">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                Site URL
+              </p>
+              <p className="truncate text-sm text-muted-foreground">{siteUrl}</p>
             </div>
-            <Button size="sm" className="h-11 md:h-9 shrink-0" asChild>
+            <Button size="sm" className="h-10 shrink-0" asChild>
               <a href={siteUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                <ExternalLink className="mr-2 h-4 w-4" />
                 Visit Site
               </a>
             </Button>
           </div>
-          {/* Preview iframe */}
-          <div className="overflow-hidden rounded-lg border border-border">
+          {/* Preview iframe with browser chrome */}
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-background shadow-lg">
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border/50">
+              <div className="flex gap-1.5">
+                <div className="h-3 w-3 rounded-full bg-destructive/60" />
+                <div className="h-3 w-3 rounded-full bg-chart-4/60" />
+                <div className="h-3 w-3 rounded-full bg-success/60" />
+              </div>
+              <div className="flex-1 mx-4">
+                <div className="flex items-center justify-center rounded-lg bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground font-mono truncate">
+                  {siteUrl}
+                </div>
+              </div>
+            </div>
             <iframe
               src={siteUrl}
               title={`Preview of ${site.name}`}
-              className="h-[250px] w-full md:h-[400px]"
+              className="h-[280px] w-full md:h-[420px]"
               sandbox="allow-scripts allow-same-origin"
             />
           </div>

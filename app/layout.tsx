@@ -13,8 +13,8 @@ export const viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Site Generator - Create Personalized Sites with AI',
-  description: 'Upload images and describe your vision. AI generates a custom, deployable website with a unique domain.',
+  title: 'Atlas - Create Personalized Sites',
+  description: 'Upload images and describe your vision. Create a custom, deployable website with a unique domain.',
   generator: 'v0.app',
   icons: {
     icon: [

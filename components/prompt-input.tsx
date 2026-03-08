@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { ArrowUp } from "lucide-react"
+import { ArrowUp, Lightbulb } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface PromptInputProps {
@@ -43,8 +43,8 @@ export function PromptInput({
   const canSubmit = prompt.trim().length > 0 && hasImages && !disabled
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="relative flex items-end rounded-xl border border-border bg-secondary/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+    <div className="flex flex-col gap-5">
+      <div className="relative flex items-end rounded-2xl border border-border/50 bg-card/50 transition-all duration-200 focus-within:border-primary/50 focus-within:bg-card focus-within:shadow-lg focus-within:shadow-primary/5 focus-glow">
         <textarea
           ref={textareaRef}
           value={prompt}
@@ -62,37 +62,40 @@ export function PromptInput({
           }
           disabled={disabled}
           rows={1}
-          className="max-h-[200px] min-h-[52px] flex-1 resize-none bg-transparent px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 md:text-sm"
+          className="max-h-[200px] min-h-[56px] flex-1 resize-none bg-transparent px-5 py-4 text-base text-foreground placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
-        <div className="p-2">
+        <div className="p-2.5">
           <Button
             size="icon"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="h-10 w-10 rounded-lg md:h-8 md:w-8"
+            className="h-10 w-10 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
             aria-label="Generate site"
           >
-            <ArrowUp className="h-4 w-4" />
+            <ArrowUp className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
-      {!hasImages && prompt.length === 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            Try a prompt:
-          </p>
+      {prompt.length === 0 && (
+        <div className="flex flex-col gap-3 animate-fade-up">
+          <div className="flex items-center gap-2">
+            <Lightbulb className="h-3.5 w-3.5 text-primary" />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Example prompts
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
-            {EXAMPLE_PROMPTS.map((example) => (
+            {EXAMPLE_PROMPTS.map((example, index) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => setPrompt(example)}
                 disabled={disabled}
-                className="rounded-lg border border-border bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                className={`rounded-xl border border-border/50 bg-card/30 px-4 py-2 text-sm text-muted-foreground transition-all duration-200 hover:border-primary/30 hover:bg-card hover:text-foreground hover:shadow-sm active:scale-[0.98] stagger-${index + 1}`}
               >
-                {example.length > 50
-                  ? example.substring(0, 50) + "..."
+                {example.length > 45
+                  ? example.substring(0, 45) + "..."
                   : example}
               </button>
             ))}

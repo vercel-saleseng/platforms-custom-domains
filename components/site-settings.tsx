@@ -350,148 +350,159 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      
-      {successMessage && (
-        <Alert className="border-green-500/50 bg-green-500/10">
-          <Check className="h-4 w-4 text-green-500" />
-          <AlertDescription className="text-green-500">{successMessage}</AlertDescription>
-        </Alert>
-      )}
+    <div className="mx-auto w-full max-w-3xl px-6 py-8 md:px-8 md:py-10 animate-fade-up">
+      <div className="flex flex-col gap-6">
+        {error && (
+          <Alert variant="destructive" className="border-destructive/30 bg-destructive/5 animate-scale-in">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="border-success/30 bg-success/5 animate-scale-in">
+            <Check className="h-4 w-4 text-success" />
+            <AlertDescription className="text-success">{successMessage}</AlertDescription>
+          </Alert>
+        )}
 
-      {/* Site Name Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Site Name</CardTitle>
-          <CardDescription>Change the display name for your site</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Site name"
-              className="flex-1"
-            />
-            <Button
-              onClick={handleSaveName}
-              disabled={isSavingName || !name.trim() || name === site.name}
-            >
-              {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Current Domains Card */}
-      {(site.subdomain || site.customDomain) && (
-        <Card>
+        {/* Site Name Card */}
+        <Card className="border-border/50 bg-card/50 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Active Domains
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Save className="h-4 w-4 text-primary" />
+              </div>
+              Site Name
             </CardTitle>
+            <CardDescription>Change the display name for your site</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Subdomain */}
-            {site.subdomain && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Subdomain</span>
-                  <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
-                    Active
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
-                    {site.subdomain}.vercel.zone
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(`https://${site.subdomain}.vercel.zone`)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`https://${site.subdomain}.vercel.zone`} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            )}
-            
-            {/* Custom Domain */}
-            {site.customDomain && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Custom Domain</span>
-                  {site.customDomainVerified ? (
-                    <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Verified
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
-                        <AlertCircle className="h-3 w-3" />
-                        Pending Verification
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={handleVerifyDomain}
-                        disabled={isVerifying}
-                        title="Check verification status"
-                      >
-                        <RefreshCw className={`h-3 w-3 ${isVerifying ? "animate-spin" : ""}`} />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <code className="flex-1 rounded bg-muted px-3 py-2 text-sm">
-                    {site.customDomain}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(`https://${site.customDomain}`)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`https://${site.customDomain}`} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleRemoveCustomDomain}
-                    disabled={isRemovingCustomDomain}
-                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                  >
-                    {isRemovingCustomDomain ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
+          <CardContent>
+            <div className="flex gap-3">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Site name"
+                className="flex-1 bg-background/50 border-border/50 focus:border-primary/50"
+              />
+              <Button
+                onClick={handleSaveName}
+                disabled={isSavingName || !name.trim() || name === site.name}
+              >
+                {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Current Domains Card */}
+        {(site.subdomain || site.customDomain) && (
+          <Card className="border-border/50 bg-card/50 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10">
+                  <Globe className="h-4 w-4 text-success" />
+                </div>
+                Active Domains
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Subdomain */}
+              {site.subdomain && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Subdomain</span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      Active
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded-lg bg-muted/50 border border-border/50 px-4 py-2.5 text-sm font-mono">
+                      {site.subdomain}.vercel.zone
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(`https://${site.subdomain}.vercel.zone`)}
+                      className="h-10 w-10 shrink-0 border-border/50 hover:bg-muted"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 border-border/50 hover:bg-muted" asChild>
+                      <a href={`https://${site.subdomain}.vercel.zone`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Custom Domain */}
+              {site.customDomain && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Custom Domain</span>
+                    {site.customDomainVerified ? (
+                      <span className="flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Verified
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 rounded-full bg-chart-4/10 px-2.5 py-0.5 text-xs font-medium text-chart-4">
+                          <AlertCircle className="h-3 w-3" />
+                          Pending
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-muted"
+                          onClick={handleVerifyDomain}
+                          disabled={isVerifying}
+                          title="Check verification status"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${isVerifying ? "animate-spin" : ""}`} />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded-lg bg-muted/50 border border-border/50 px-4 py-2.5 text-sm font-mono">
+                      {site.customDomain}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(`https://${site.customDomain}`)}
+                      className="h-10 w-10 shrink-0 border-border/50 hover:bg-muted"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 border-border/50 hover:bg-muted" asChild>
+                      <a href={`https://${site.customDomain}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleRemoveCustomDomain}
+                      disabled={isRemovingCustomDomain}
+                      className="h-10 w-10 shrink-0 border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+                    >
+                      {isRemovingCustomDomain ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Domain Configuration */}
       {!hasVercelProject ? (
@@ -785,58 +796,64 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
 
       {/* Danger Zone */}
       <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle className="text-lg text-destructive">Danger Zone</CardTitle>
-          <CardDescription>
-            Irreversible actions that will permanently affect your site.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-medium">Delete this site</p>
-              <p className="text-sm text-muted-foreground">
-                Once deleted, all data associated with this site will be permanently removed.
-              </p>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={isDeleting}>
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="mr-2 h-4 w-4" />
+          <CardHeader>
+            <CardTitle className="text-lg text-destructive flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              </div>
+              Danger Zone
+            </CardTitle>
+            <CardDescription>
+              Irreversible actions that will permanently affect your site.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-medium">Delete this site</p>
+                <p className="text-sm text-muted-foreground">
+                  Once deleted, all data associated with this site will be permanently removed.
+                </p>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={isDeleting} className="shrink-0">
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Site
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-border/50">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete the site
+                      <span className="font-semibold text-foreground"> {site.name}</span> and remove all associated data.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="border-border/50 hover:bg-muted">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteSite}
+                      className="bg-destructive text-white hover:bg-destructive/80 font-medium"
+                    >
                       Delete Site
-                    </>
-                  )}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the site
-                    <span className="font-medium"> {site.name}</span> and remove all associated data.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteSite}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete Site
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
