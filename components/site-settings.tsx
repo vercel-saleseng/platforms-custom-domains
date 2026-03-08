@@ -439,10 +439,22 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                       Verified
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
-                      <AlertCircle className="h-3 w-3" />
-                      Pending Verification
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
+                        <AlertCircle className="h-3 w-3" />
+                        Pending Verification
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleVerifyDomain}
+                        disabled={isVerifying}
+                        title="Check verification status"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${isVerifying ? "animate-spin" : ""}`} />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
