@@ -388,7 +388,6 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
               <Button
                 onClick={handleSaveName}
                 disabled={isSavingName || !name.trim() || name === site.name}
-                className={!isSavingName && name.trim() && name !== site.name ? "gradient-primary hover:opacity-90" : ""}
               >
                 {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
               </Button>

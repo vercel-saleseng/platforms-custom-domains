@@ -3,27 +3,32 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Layers, Plus, ArrowRight, Globe, Loader2 } from "lucide-react"
+import { Menu, Layers, Plus, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
-import { useIsMobile } from "@/hooks/use-mobile"
 import type { SiteRecord } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const MOBILE_BREAKPOINT = 768
 
 export default function Home() {
   const router = useRouter()
-  const isMobile = useIsMobile()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState<boolean | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
 
-  // On desktop, default sidebar open
+  // Detect mobile and set sidebar state
   useEffect(() => {
-    if (!isMobile) {
-      setSidebarOpen(true)
+    const checkMobile = () => {
+      const mobile = window.innerWidth < MOBILE_BREAKPOINT
+      setIsMobile(mobile)
+      if (mobile) setSidebarOpen(false)
     }
-  }, [isMobile])
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Fetch all sites
   const { data: sitesData } = useSWR<{ sites: SiteRecord[] }>(
@@ -67,10 +72,17 @@ export default function Home() {
       activeSiteId={null}
       onSelectSite={handleSelectSite}
       onNewSite={handleNewSite}
-      onToggle={() => setSidebarOpen(false)}
-      isMobile={isMobile}
     />
   )
+
+  // Don't render sidebar until we know mobile state
+  if (isMobile === null) {
+    return (
+      <div className="flex h-[100dvh] overflow-hidden bg-background">
+        <main className="flex flex-1 flex-col overflow-hidden" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">
@@ -139,7 +151,7 @@ export default function Home() {
                 size="lg"
                 onClick={handleNewSite}
                 disabled={isCreating}
-                className="h-13 gap-2.5 px-8 text-base font-medium gradient-primary hover:opacity-90 glow-primary transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                className="h-12 gap-2.5 px-6 text-base font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
               >
                 {isCreating ? (
                   <>
@@ -150,7 +162,6 @@ export default function Home() {
                   <>
                     <Plus className="h-5 w-5" />
                     Create New Site
-                    <ArrowRight className="h-4 w-4 ml-1" />
                   </>
                 )}
               </Button>

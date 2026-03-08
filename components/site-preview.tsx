@@ -139,7 +139,7 @@ export function SitePreview({ site }: SitePreviewProps) {
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" className="h-8 gradient-primary hover:opacity-90 glow-sm" asChild>
+            <Button size="sm" className="h-8" asChild>
               <a href={siteUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                 Open

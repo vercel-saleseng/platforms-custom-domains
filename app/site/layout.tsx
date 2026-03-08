@@ -7,10 +7,10 @@ import { Menu, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
-import { useIsMobile } from "@/hooks/use-mobile"
 import type { SiteRecord } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const MOBILE_BREAKPOINT = 768
 
 export default function SiteLayout({
   children,
@@ -19,18 +19,23 @@ export default function SiteLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const isMobile = useIsMobile()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState<boolean | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true) // Default open for desktop
 
   // Extract site ID from pathname
   const siteId = pathname?.split("/site/")[1]?.split("/")[0] || null
 
-  // On desktop, default sidebar open
+  // Detect mobile and set sidebar state
   useEffect(() => {
-    if (!isMobile) {
-      setSidebarOpen(true)
+    const checkMobile = () => {
+      const mobile = window.innerWidth < MOBILE_BREAKPOINT
+      setIsMobile(mobile)
+      if (mobile) setSidebarOpen(false) // Close sidebar on mobile
     }
-  }, [isMobile])
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Fetch all sites for sidebar
   const { data: sitesData } = useSWR<{ sites: SiteRecord[] }>(
@@ -73,10 +78,19 @@ export default function SiteLayout({
       activeSiteId={siteId}
       onSelectSite={handleSelectSite}
       onNewSite={handleNewSite}
-      onToggle={() => setSidebarOpen(false)}
-      isMobile={isMobile}
     />
   )
+
+  // Don't render until we know if we're on mobile or not
+  if (isMobile === null) {
+    return (
+      <div className="flex h-[100dvh] overflow-hidden bg-background">
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {children}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">

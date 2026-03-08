@@ -193,7 +193,7 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
               </p>
               <p className="truncate text-sm text-muted-foreground">{siteUrl}</p>
             </div>
-            <Button size="sm" className="h-10 shrink-0 gradient-primary hover:opacity-90 glow-sm" asChild>
+            <Button size="sm" className="h-10 shrink-0" asChild>
               <a href={siteUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Visit Site

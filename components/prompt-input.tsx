@@ -69,11 +69,7 @@ export function PromptInput({
             size="icon"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={`h-10 w-10 rounded-xl transition-all duration-200 ${
-              canSubmit 
-                ? "gradient-primary glow-sm hover:scale-105 active:scale-95" 
-                : ""
-            }`}
+            className="h-10 w-10 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
             aria-label="Generate site"
           >
             <ArrowUp className="h-5 w-5" />
