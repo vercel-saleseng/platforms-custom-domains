@@ -841,10 +841,10 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel className="border-border/50">Cancel</AlertDialogCancel>
+                    <AlertDialogCancel className="border-border/50 hover:bg-muted">Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleDeleteSite}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      className="bg-destructive text-white hover:bg-destructive/80 font-medium"
                     >
                       Delete Site
                     </AlertDialogAction>

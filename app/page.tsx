@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Sparkles, Plus, ArrowRight, Globe, Loader2 } from "lucide-react"
+import { Menu, Layers, Plus, ArrowRight, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -102,7 +102,7 @@ export default function Home() {
           </Button>
           <div className="ml-3 flex items-center gap-2.5 md:hidden">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <Layers className="h-4 w-4 text-primary" />
             </div>
             <span className="text-sm font-semibold tracking-tight">Atlas</span>
           </div>
@@ -119,17 +119,17 @@ export default function Home() {
               <div className="relative">
                 <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-xl animate-glow-pulse" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 shadow-lg">
-                  <Sparkles className="h-10 w-10 text-primary" />
+                  <Layers className="h-10 w-10 text-primary" />
                 </div>
               </div>
               
               {/* Hero Text */}
               <div className="flex flex-col gap-3">
                 <h1 className="text-3xl font-bold tracking-tight text-foreground text-balance md:text-4xl">
-                  AI Site Generator
+                  Atlas
                 </h1>
                 <p className="text-base text-muted-foreground text-pretty leading-relaxed max-w-md">
-                  Upload your images and describe your vision. Our AI creates a
+                  Upload your images and describe your vision. Create a
                   custom, deployable website with a unique domain.
                 </p>
               </div>

@@ -7,7 +7,6 @@ import {
   XCircle,
   ExternalLink,
   RotateCcw,
-  Sparkles,
   PartyPopper,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -68,7 +67,7 @@ export function GenerationStatus({ site, onReset, onRetry, isRetrying, hideReset
             ) : isError ? (
               <XCircle className="h-6 w-6" />
             ) : (
-              <Sparkles className="h-6 w-6 animate-pulse" />
+              <Loader2 className="h-6 w-6 animate-spin" />
             )}
           </div>
           <div>

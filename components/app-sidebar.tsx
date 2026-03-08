@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Sparkles, PanelLeftClose, Globe } from "lucide-react"
+import { Plus, Layers, PanelLeftClose, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SiteCard } from "@/components/site-card"
@@ -30,7 +30,7 @@ export function AppSidebar({
         <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border/50">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20">
-              <Sparkles className="h-4 w-4 text-sidebar-primary" />
+              <Layers className="h-4 w-4 text-sidebar-primary" />
             </div>
             <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
               Atlas

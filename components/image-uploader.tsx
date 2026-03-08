@@ -108,11 +108,11 @@ export function ImageUploader({
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
-                  className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                   aria-label={`Remove image ${index + 1}`}
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/90 text-destructive-foreground shadow-lg">
-                    <X className="h-4 w-4" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black shadow-lg hover:bg-white/90 transition-colors">
+                    <X className="h-5 w-5" />
                   </div>
                 </button>
               )}

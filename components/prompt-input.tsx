@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { ArrowUp, Sparkles } from "lucide-react"
+import { ArrowUp, Lightbulb } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface PromptInputProps {
@@ -81,10 +81,10 @@ export function PromptInput({
         </div>
       </div>
 
-      {!hasImages && prompt.length === 0 && (
+      {prompt.length === 0 && (
         <div className="flex flex-col gap-3 animate-fade-up">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <Lightbulb className="h-3.5 w-3.5 text-primary" />
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Example prompts
             </p>

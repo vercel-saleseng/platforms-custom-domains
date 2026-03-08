@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Sparkles, Images, MessageSquare, CheckCircle2 } from "lucide-react"
+import { Layers, Images, MessageSquare, CheckCircle2 } from "lucide-react"
 import { ImageUploader } from "@/components/image-uploader"
 import { PromptInput } from "@/components/prompt-input"
 import { GenerationStatus } from "@/components/generation-status"
@@ -94,7 +94,7 @@ export function SiteSetup({ site, onSiteUpdated }: SiteSetupProps) {
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl animate-glow-pulse" />
             <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 shadow-lg">
-              <Sparkles className="h-8 w-8 text-primary" />
+              <Layers className="h-8 w-8 text-primary" />
             </div>
           </div>
           <div className="flex flex-col gap-2">
