@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Sparkles, PanelLeftClose } from "lucide-react"
+import { Plus, Sparkles, PanelLeftClose, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SiteCard } from "@/components/site-card"
@@ -24,21 +24,23 @@ export function AppSidebar({
   isMobile,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header - only show on desktop (mobile has header in Sheet) */}
       {!isMobile && (
-        <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-sidebar-primary" />
-            <span className="text-sm font-semibold text-sidebar-foreground">
-              Site Generator
+        <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border/50">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20">
+              <Sparkles className="h-4 w-4 text-sidebar-primary" />
+            </div>
+            <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
+              Atlas
             </span>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            className="h-8 w-8 text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-smooth"
             aria-label="Collapse sidebar"
           >
             <PanelLeftClose className="h-4 w-4" />
@@ -50,7 +52,7 @@ export function AppSidebar({
       <div className="p-3">
         <Button
           onClick={onNewSite}
-          className="h-11 w-full justify-start gap-2 md:h-9"
+          className="h-10 w-full justify-start gap-2.5 font-medium gradient-primary hover:opacity-90 transition-all duration-200"
           size="sm"
         >
           <Plus className="h-4 w-4" />
@@ -59,15 +61,21 @@ export function AppSidebar({
       </div>
 
       {/* Site list */}
-      <ScrollArea className="flex-1 px-2 pb-3">
+      <ScrollArea className="flex-1 px-2 pb-4">
         {sites.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-            <p className="text-xs text-sidebar-foreground/40">
-              No sites yet. Create your first one!
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-accent/50 mb-4">
+              <Globe className="h-6 w-6 text-sidebar-foreground/30" />
+            </div>
+            <p className="text-sm text-sidebar-foreground/50 font-medium">
+              No sites yet
+            </p>
+            <p className="text-xs text-sidebar-foreground/30 mt-1">
+              Create your first one to get started
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             {sites.map((site) => (
               <SiteCard
                 key={site.id}

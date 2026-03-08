@@ -3,7 +3,7 @@
 import { use, useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Sparkles, ArrowLeft } from "lucide-react"
+import { Menu, Sparkles, ArrowLeft, Monitor, Settings, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -107,16 +107,30 @@ export default function SitePage({
   if (isLoading) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="flex flex-col items-center gap-4 animate-fade-up">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl animate-glow-pulse" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">Loading site...</p>
+        </div>
       </div>
     )
   }
 
   if (!site) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background">
-        <p className="text-muted-foreground">Site not found</p>
-        <Button variant="outline" onClick={() => router.push("/")}>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-background animate-fade-up">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted/50 border border-border/50">
+          <Sparkles className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-medium text-foreground">Site not found</p>
+          <p className="mt-1 text-sm text-muted-foreground">This site may have been deleted or moved</p>
+        </div>
+        <Button variant="outline" onClick={() => router.push("/")} className="mt-2">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Go Home
         </Button>
@@ -137,7 +151,7 @@ export default function SitePage({
       {/* Mobile Sidebar Sheet */}
       {isMobile && (
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-[280px] p-0">
+          <SheetContent side="left" className="w-[280px] p-0 border-r border-sidebar-border">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             {sidebarContent}
           </SheetContent>
@@ -147,22 +161,30 @@ export default function SitePage({
       {/* Main Content */}
       <main className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-border px-3 py-2 md:px-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3 md:px-6">
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="h-10 w-10 text-muted-foreground hover:text-foreground md:h-8 md:w-8"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-smooth"
               aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
-              <Menu className="h-5 w-5 md:h-4 md:w-4" />
+              <Menu className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold truncate max-w-[200px]">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <Sparkles className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight truncate max-w-[200px]">
                 {site.name}
               </span>
+              {site.status === "complete" && (
+                <span className="flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  Live
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -181,24 +203,26 @@ export default function SitePage({
               onValueChange={setActiveTab}
               className="flex flex-1 flex-col overflow-hidden"
             >
-              <div className="border-b border-border px-4">
-                <TabsList className="h-12 w-full justify-start gap-4 rounded-none border-0 bg-transparent p-0">
+              <div className="border-b border-border/50 px-4 md:px-6">
+                <TabsList className="h-14 w-full justify-start gap-1 rounded-none border-0 bg-transparent p-0">
                   <TabsTrigger
                     value="preview"
-                    className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary"
+                    className="relative h-14 gap-2 rounded-none border-0 bg-transparent px-4 pb-4 pt-4 font-medium text-muted-foreground shadow-none transition-all data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full data-[state=active]:after:bg-primary hover:text-foreground"
                   >
+                    <Monitor className="h-4 w-4" />
                     Preview
                   </TabsTrigger>
                   <TabsTrigger
                     value="settings"
-                    className="relative h-12 rounded-none border-0 bg-transparent px-0 pb-3 pt-3 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-primary"
+                    className="relative h-14 gap-2 rounded-none border-0 bg-transparent px-4 pb-4 pt-4 font-medium text-muted-foreground shadow-none transition-all data-[state=active]:text-foreground data-[state=active]:shadow-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full data-[state=active]:after:bg-primary hover:text-foreground"
                   >
+                    <Settings className="h-4 w-4" />
                     Settings
                   </TabsTrigger>
                 </TabsList>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto bg-muted/20">
                 <TabsContent value="preview" className="mt-0 h-full">
                   <SitePreview site={site} />
                 </TabsContent>
