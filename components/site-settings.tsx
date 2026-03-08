@@ -62,6 +62,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [isVerifying, setIsVerifying] = useState(false)
   const [isRemovingCustomDomain, setIsRemovingCustomDomain] = useState(false)
   const [isFetchingDnsInfo, setIsFetchingDnsInfo] = useState(false)
+  const [hasFetchedDnsInfo, setHasFetchedDnsInfo] = useState(false)
   
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -71,20 +72,33 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const hasVercelProject = !!site.vercelProjectId
   const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
 
+  // Reset state when site changes
+  useEffect(() => {
+    setCustomDomainResult(null)
+    setHasFetchedDnsInfo(false)
+    setCustomDomain(site.customDomain || "")
+    setSubdomain(site.subdomain || "")
+  }, [site.id])
+  
   // Fetch DNS info for existing unverified custom domain
   useEffect(() => {
-    if (site.customDomain && !site.customDomainVerified && !customDomainResult) {
+    if (site.customDomain && !site.customDomainVerified && !hasFetchedDnsInfo) {
       setIsFetchingDnsInfo(true)
+      setHasFetchedDnsInfo(true)
+      
       fetch(`/api/domains/info?siteId=${site.id}&domain=${encodeURIComponent(site.customDomain)}`)
         .then(res => res.json())
         .then(data => {
-          if (data.dnsRecords) {
-            setCustomDomainResult({
-              success: true,
-              verified: data.verified || false,
-              dnsRecords: data.dnsRecords,
-            })
-          }
+          // Use returned DNS records or fallback to defaults
+          const dnsRecords = data.dnsRecords || [
+            { type: "A", name: "@", value: "76.76.21.21" },
+            { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+          ]
+          setCustomDomainResult({
+            success: true,
+            verified: data.verified || false,
+            dnsRecords,
+          })
         })
         .catch(() => {
           // Fallback to default DNS records if fetch fails
@@ -99,7 +113,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         })
         .finally(() => setIsFetchingDnsInfo(false))
     }
-  }, [site.customDomain, site.customDomainVerified, site.id, customDomainResult])
+  }, [site.customDomain, site.customDomainVerified, site.id, hasFetchedDnsInfo])
 
   // Debounced subdomain availability check
   useEffect(() => {
