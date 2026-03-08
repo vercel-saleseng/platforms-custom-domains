@@ -82,23 +82,38 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   
   // Fetch DNS info for existing unverified custom domain
   useEffect(() => {
+    console.log("[v0] DNS fetch check:", { 
+      customDomain: site.customDomain, 
+      customDomainVerified: site.customDomainVerified, 
+      hasFetchedDnsInfo 
+    })
     if (site.customDomain && !site.customDomainVerified && !hasFetchedDnsInfo) {
+      console.log("[v0] Fetching DNS info for:", site.customDomain)
       setIsFetchingDnsInfo(true)
       setHasFetchedDnsInfo(true)
       
       fetch(`/api/domains/info?siteId=${site.id}&domain=${encodeURIComponent(site.customDomain)}`)
         .then(res => res.json())
         .then(data => {
+          console.log("[v0] DNS info response:", data)
           // Use returned DNS records or fallback to defaults
           const dnsRecords = data.dnsRecords || [
             { type: "A", name: "@", value: "76.76.21.21" },
             { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
           ]
+          console.log("[v0] Setting customDomainResult with dnsRecords:", dnsRecords)
+          // Always show as unverified in this context since we're fetching for unverified domains
+          // The user needs to click "Verify" to update our database
           setCustomDomainResult({
             success: true,
-            verified: data.verified || false,
+            verified: false, // Force unverified to show DNS records until user verifies
             dnsRecords,
           })
+          
+          // If domain is actually verified at Vercel level, trigger an update
+          if (data.verified) {
+            onSiteUpdated() // This will refresh the site data
+          }
         })
         .catch(() => {
           // Fallback to default DNS records if fetch fails
@@ -640,6 +655,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                 )}
                 
                 {/* DNS Configuration - show for unverified existing domain OR new domain result */}
+                {console.log("[v0] Render check - customDomainResult:", customDomainResult)}
                 {isFetchingDnsInfo && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
