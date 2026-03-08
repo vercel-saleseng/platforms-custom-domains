@@ -49,9 +49,9 @@ export function SiteCard({ site, isActive, onClick }: SiteCardProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium">{site.name}</span>
         <span className="truncate text-xs text-sidebar-foreground/50">
-          {site.prompt.length > 40
-            ? site.prompt.substring(0, 40) + "..."
-            : site.prompt}
+          {site.subdomain 
+            ? `${site.subdomain}.vercel.zone`
+            : site.domain || site.previewUrl || "No URL yet"}
         </span>
       </div>
 
