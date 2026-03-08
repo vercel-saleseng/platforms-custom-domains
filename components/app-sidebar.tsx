@@ -1,6 +1,7 @@
 "use client"
 
-import { Plus, Layers, PanelLeftClose, Globe } from "lucide-react"
+import Link from "next/link"
+import { Plus, Layers, PanelLeftClose, Globe, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SiteCard } from "@/components/site-card"
@@ -28,14 +29,17 @@ export function AppSidebar({
       {/* Header - only show on desktop (mobile has header in Sheet) */}
       {!isMobile && (
         <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border/50">
-          <div className="flex items-center gap-2.5">
+          <Link 
+            href="/" 
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20">
               <Layers className="h-4 w-4 text-sidebar-primary" />
             </div>
             <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
               Atlas
             </span>
-          </div>
+          </Link>
           <Button
             variant="ghost"
             size="icon"
@@ -48,8 +52,8 @@ export function AppSidebar({
         </div>
       )}
 
-      {/* New Site CTA */}
-      <div className="p-3">
+      {/* Actions */}
+      <div className="p-3 flex flex-col gap-2">
         <Button
           onClick={onNewSite}
           className="h-10 w-full justify-start gap-2.5 font-medium gradient-primary hover:opacity-90 transition-all duration-200"
@@ -57,6 +61,17 @@ export function AppSidebar({
         >
           <Plus className="h-4 w-4" />
           New Site
+        </Button>
+        <Button
+          variant="ghost"
+          className="h-10 w-full justify-start gap-2.5 font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+          size="sm"
+          asChild
+        >
+          <Link href="/">
+            <Home className="h-4 w-4" />
+            Home
+          </Link>
         </Button>
       </div>
 
