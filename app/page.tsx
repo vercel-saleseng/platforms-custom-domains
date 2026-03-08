@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Layers, Plus, Globe, Loader2 } from "lucide-react"
+import { Menu, Layers, Plus, Globe, Loader2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
