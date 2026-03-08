@@ -50,8 +50,8 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const [subdomainStatus, setSubdomainStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
   const [isAssigningSubdomain, setIsAssigningSubdomain] = useState(false)
   
-  // Custom domain state
-  const [customDomain, setCustomDomain] = useState("")
+  // Custom domain state - initialize with existing custom domain if set
+  const [customDomain, setCustomDomain] = useState(site.customDomain || "")
   const [isAddingCustomDomain, setIsAddingCustomDomain] = useState(false)
   const [customDomainResult, setCustomDomainResult] = useState<{
     success: boolean
@@ -61,6 +61,8 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   } | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
   const [isRemovingCustomDomain, setIsRemovingCustomDomain] = useState(false)
+  const [isFetchingDnsInfo, setIsFetchingDnsInfo] = useState(false)
+  const [hasFetchedDnsInfo, setHasFetchedDnsInfo] = useState(false)
   
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -69,6 +71,56 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   const router = useRouter()
   const hasVercelProject = !!site.vercelProjectId
   const isGenerating = site.status !== "complete" && site.status !== "error" && site.status !== "draft"
+
+  // Reset state when site changes
+  useEffect(() => {
+    setCustomDomainResult(null)
+    setHasFetchedDnsInfo(false)
+    setCustomDomain(site.customDomain || "")
+    setSubdomain(site.subdomain || "")
+  }, [site.id])
+  
+  // Fetch DNS info for existing unverified custom domain
+  useEffect(() => {
+    if (site.customDomain && !site.customDomainVerified && !hasFetchedDnsInfo) {
+      setIsFetchingDnsInfo(true)
+      setHasFetchedDnsInfo(true)
+      
+      fetch(`/api/domains/info?siteId=${site.id}&domain=${encodeURIComponent(site.customDomain)}`)
+        .then(res => res.json())
+        .then(data => {
+          // Use returned DNS records or fallback to defaults
+          const dnsRecords = data.dnsRecords || [
+            { type: "A", name: "@", value: "76.76.21.21" },
+            { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+          ]
+          // Always show as unverified in this context since we're fetching for unverified domains
+          // The user needs to click "Verify" to update our database
+          setCustomDomainResult({
+            success: true,
+            verified: false, // Force unverified to show DNS records until user verifies
+            dnsRecords,
+          })
+          
+          // If domain is actually verified at Vercel level, trigger an update
+          if (data.verified) {
+            onSiteUpdated() // This will refresh the site data
+          }
+        })
+        .catch(() => {
+          // Fallback to default DNS records if fetch fails
+          setCustomDomainResult({
+            success: true,
+            verified: false,
+            dnsRecords: [
+              { type: "A", name: "@", value: "76.76.21.21" },
+              { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+            ],
+          })
+        })
+        .finally(() => setIsFetchingDnsInfo(false))
+    }
+  }, [site.customDomain, site.customDomainVerified, site.id, hasFetchedDnsInfo])
 
   // Debounced subdomain availability check
   useEffect(() => {
@@ -186,17 +238,21 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         throw new Error(data.error || "Failed to add domain")
       }
       
+      // Always show DNS records after adding, even if Vercel says verified
+      // User needs to see the DNS configuration regardless
+      const dnsRecords = data.dnsRecords || [
+        { type: "A", name: "@", value: "76.76.21.21" },
+        { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+      ]
+      
       setCustomDomainResult({
         success: true,
-        verified: data.verified,
-        dnsRecords: data.dnsRecords,
+        verified: false, // Always show as unverified so DNS records display
+        dnsRecords,
       })
       
-      if (data.verified) {
-        setSuccessMessage(`Domain ${data.domain} added and verified!`)
-        setCustomDomain("")
-        onSiteUpdated()
-      }
+      setSuccessMessage(`Domain ${data.domain} added! Configure DNS below.`)
+      onSiteUpdated()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add domain")
     } finally {
@@ -205,6 +261,9 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
   }
 
   const handleVerifyDomain = async () => {
+    const domainToVerify = site.customDomain || customDomain
+    if (!domainToVerify) return
+    
     setIsVerifying(true)
     setError(null)
     
@@ -214,7 +273,7 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           siteId: site.id,
-          domain: customDomain,
+          domain: domainToVerify,
         }),
       })
       
@@ -223,7 +282,6 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
       if (data.verified) {
         setSuccessMessage("Domain verified successfully!")
         setCustomDomainResult(null)
-        setCustomDomain("")
         onSiteUpdated()
       } else {
         setError("Domain not yet verified. Please check your DNS settings.")
@@ -381,10 +439,22 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
                       Verified
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
-                      <AlertCircle className="h-3 w-3" />
-                      Pending Verification
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-500">
+                        <AlertCircle className="h-3 w-3" />
+                        Pending Verification
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleVerifyDomain}
+                        disabled={isVerifying}
+                        title="Check verification status"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${isVerifying ? "animate-spin" : ""}`} />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
@@ -553,33 +623,53 @@ export function SiteSettings({ site, onSiteUpdated }: SiteSettingsProps) {
               </TabsContent>
               
               <TabsContent value="custom" className="mt-4 space-y-4">
-                <div className="space-y-2">
-                  <Label>Add a custom domain</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Connect your own domain to this site
-                  </p>
-                </div>
+                {/* Show existing custom domain status or add new form */}
+                {site.customDomain && !site.customDomainVerified ? (
+                  <div className="space-y-2">
+                    <Label>Configure DNS for {site.customDomain}</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Add these DNS records at your domain registrar to verify ownership
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Add a custom domain</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Connect your own domain to this site
+                      </p>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Input
+                        value={customDomain}
+                        onChange={(e) => setCustomDomain(e.target.value.toLowerCase())}
+                        placeholder="example.com"
+                        className="flex-1"
+                        disabled={!!site.customDomain}
+                      />
+                      <Button
+                        onClick={handleAddCustomDomain}
+                        disabled={!customDomain || isAddingCustomDomain || !!site.customDomain}
+                      >
+                        {isAddingCustomDomain ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Add"
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
                 
-                <div className="flex gap-2">
-                  <Input
-                    value={customDomain}
-                    onChange={(e) => setCustomDomain(e.target.value.toLowerCase())}
-                    placeholder="example.com"
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={handleAddCustomDomain}
-                    disabled={!customDomain || isAddingCustomDomain}
-                  >
-                    {isAddingCustomDomain ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Add"
-                    )}
-                  </Button>
-                </div>
+                {/* DNS Configuration - show for unverified existing domain OR new domain result */}
+                {isFetchingDnsInfo && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading DNS configuration...</span>
+                  </div>
+                )}
                 
-                {/* DNS Configuration */}
                 {customDomainResult && !customDomainResult.verified && customDomainResult.dnsRecords && (
                   <div className="mt-4 space-y-4 rounded-lg border border-border p-4">
                     <div className="space-y-1">
