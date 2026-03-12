@@ -30,6 +30,7 @@ export async function POST(
 
     if (isFirstMessage) {
       // First message: create chat + trigger full build workflow
+      console.log("[v0] Creating new chat for app:", id)
       await updateAppStatus(id, "building", 1)
       
       // Create chat with v0
@@ -37,6 +38,7 @@ export async function POST(
         message,
         responseMode: "experimental_stream",
       })
+      console.log("[v0] Chat created:", chat.id, "hasStream:", !!chat.stream)
 
       // Update with chat ID
       await updateApp(id, {
@@ -55,7 +57,10 @@ export async function POST(
 
       // Return the raw stream for StreamingMessage component
       const stream = chat.stream
+      console.log("[v0] Stream available:", !!stream, "type:", stream?.constructor?.name)
+      
       if (!stream) {
+        console.log("[v0] No stream, returning JSON response")
         return NextResponse.json({ 
           success: true, 
           chatId: chat.id,
@@ -63,6 +68,7 @@ export async function POST(
         })
       }
 
+      console.log("[v0] Returning stream response")
       // Proxy the raw v0 stream directly
       return new Response(stream, {
         headers: {

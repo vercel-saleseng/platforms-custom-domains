@@ -155,8 +155,10 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       }
 
       const contentType = res.headers.get("content-type")
+      console.log("[v0] Response content-type:", contentType, "has body:", !!res.body)
 
       if (contentType?.includes("application/octet-stream") && res.body) {
+        console.log("[v0] Got stream response, consuming...")
         // We got a stream - add streaming indicator
         const streamingMessage: ChatMessage = {
           id: `assistant_${Date.now()}`,
@@ -169,16 +171,25 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         
         // Consume the stream in background
         const reader = res.body.getReader()
+        let chunkCount = 0
         try {
           while (true) {
-            const { done } = await reader.read()
-            if (done) break
+            const { done, value } = await reader.read()
+            if (done) {
+              console.log("[v0] Stream done after", chunkCount, "chunks")
+              break
+            }
+            chunkCount++
+            if (chunkCount <= 3) {
+              console.log("[v0] Chunk", chunkCount, ":", new TextDecoder().decode(value).slice(0, 100))
+            }
           }
         } catch (e) {
-          console.error("Stream error:", e)
+          console.error("[v0] Stream error:", e)
         }
         
         // Stream complete - reload messages
+        console.log("[v0] Reloading chat history after stream complete")
         setIsLoading(false)
         await loadChatHistory()
         onAppUpdated()
