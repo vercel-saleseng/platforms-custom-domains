@@ -63,8 +63,8 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         }) => ({
           id: msg.id,
           role: msg.role as "user" | "assistant",
-          // Parse content for assistant messages (MessageBinaryFormat)
-          content: msg.role === "assistant" ? JSON.parse(msg.content) : msg.content,
+          // Content from v0.chats.findMessages() is a JSON string - parse it
+          content: JSON.parse(msg.content),
           createdAt: msg.createdAt,
         }))
         setMessages(formattedMessages)
@@ -77,10 +77,13 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return
 
+    const messageText = input.trim()
+    
+    // Create optimistic user message in MessageBinaryFormat
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: "user",
-      content: input.trim(),
+      content: { version: 1, parts: [{ type: "mdx", content: messageText }] },
       createdAt: new Date().toISOString(),
     }
 
@@ -94,7 +97,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       const res = await fetch(`/api/apps/${app.id}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({ message: messageText }),
       })
 
       if (!res.ok) {
@@ -204,7 +207,14 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
               >
                 {message.role === "user" ? (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
-                    <p className="text-sm whitespace-pre-wrap">{String(message.content)}</p>
+                    <Message
+                      content={message.content}
+                      messageId={message.id}
+                      role="user"
+                      components={{
+                        p: { className: "text-sm" },
+                      }}
+                    />
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
