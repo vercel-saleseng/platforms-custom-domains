@@ -80,11 +80,14 @@ export async function POST(
 
     } else {
       // Subsequent messages: send to existing chat
+      console.log("[v0] Sending message to existing chat:", app.v0ChatId)
       const response = await v0.chats.sendMessage({
         chatId: app.v0ChatId!,
         message,
         responseMode: "experimental_stream",
       })
+      console.log("[v0] sendMessage response keys:", Object.keys(response))
+      console.log("[v0] sendMessage hasStream:", !!response.stream)
 
       // Mark app as having pending changes
       const messageId = `msg_${Date.now()}`
@@ -98,7 +101,9 @@ export async function POST(
       }
 
       const stream = response.stream
+      console.log("[v0] Stream for existing chat:", !!stream, stream?.constructor?.name)
       if (!stream) {
+        console.log("[v0] No stream available, returning JSON")
         return NextResponse.json({ 
           success: true, 
           hasPendingChanges: true,
@@ -106,6 +111,7 @@ export async function POST(
         })
       }
 
+      console.log("[v0] Returning stream for existing chat")
       // Proxy the raw v0 stream directly
       return new Response(stream, {
         headers: {
