@@ -155,11 +155,9 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       }
 
       const contentType = res.headers.get("content-type")
-      console.log("[v0] Response content-type:", contentType, "has body:", !!res.body)
 
       if (contentType?.includes("application/octet-stream") && res.body) {
-        console.log("[v0] Got stream response, consuming...")
-        // We got a stream - add streaming indicator
+        // First message returns a stream - add streaming indicator
         const streamingMessage: ChatMessage = {
           id: `assistant_${Date.now()}`,
           role: "assistant",
@@ -169,34 +167,26 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         }
         setMessages((prev) => [...prev, streamingMessage])
         
-        // Consume the stream in background
+        // Consume the stream in background (we show typing indicator during this)
         const reader = res.body.getReader()
-        let chunkCount = 0
         try {
           while (true) {
-            const { done, value } = await reader.read()
-            if (done) {
-              console.log("[v0] Stream done after", chunkCount, "chunks")
-              break
-            }
-            chunkCount++
-            if (chunkCount <= 3) {
-              console.log("[v0] Chunk", chunkCount, ":", new TextDecoder().decode(value).slice(0, 100))
-            }
+            const { done } = await reader.read()
+            if (done) break
           }
         } catch (e) {
-          console.error("[v0] Stream error:", e)
+          console.error("Stream error:", e)
         }
         
         // Stream complete - reload messages
-        console.log("[v0] Reloading chat history after stream complete")
         setIsLoading(false)
         await loadChatHistory()
         onAppUpdated()
       } else {
-        // JSON response - reload chat history
-        setIsLoading(false)
+        // JSON response (sendMessage doesn't support streaming)
+        // The API call is blocking, so response means v0 is done
         await loadChatHistory()
+        setIsLoading(false)
         onAppUpdated()
       }
     } catch (err) {

@@ -30,15 +30,13 @@ export async function POST(
 
     if (isFirstMessage) {
       // First message: create chat + trigger full build workflow
-      console.log("[v0] Creating new chat for app:", id)
       await updateAppStatus(id, "building", 1)
       
-      // Create chat with v0
+      // Create chat with v0 (streaming for first message)
       const chat = await v0.chats.create({
         message,
         responseMode: "experimental_stream",
       })
-      console.log("[v0] Chat created:", chat.id, "hasStream:", !!chat.stream)
 
       // Update with chat ID
       await updateApp(id, {
@@ -55,12 +53,9 @@ export async function POST(
         workflowRunId: run.runId,
       })
 
-      // Return the raw stream for StreamingMessage component
+      // Return the raw stream for real-time display
       const stream = chat.stream
-      console.log("[v0] Stream available:", !!stream, "type:", stream?.constructor?.name)
-      
       if (!stream) {
-        console.log("[v0] No stream, returning JSON response")
         return NextResponse.json({ 
           success: true, 
           chatId: chat.id,
@@ -68,7 +63,6 @@ export async function POST(
         })
       }
 
-      console.log("[v0] Returning stream response")
       // Proxy the raw v0 stream directly
       return new Response(stream, {
         headers: {
@@ -80,45 +74,22 @@ export async function POST(
 
     } else {
       // Subsequent messages: send to existing chat
-      console.log("[v0] Sending message to existing chat:", app.v0ChatId)
-      const response = await v0.chats.sendMessage({
+      // Note: sendMessage does NOT support streaming - it's a blocking call
+      await v0.chats.sendMessage({
         chatId: app.v0ChatId!,
         message,
-        responseMode: "experimental_stream",
       })
-      console.log("[v0] sendMessage response keys:", Object.keys(response))
-      console.log("[v0] sendMessage hasStream:", !!response.stream)
 
       // Mark app as having pending changes
       const messageId = `msg_${Date.now()}`
       await markPendingChanges(id, messageId)
 
-      // Update version ID if available
-      if (response.latestVersion?.id) {
-        await updateApp(id, {
-          v0VersionId: response.latestVersion.id,
-        })
-      }
-
-      const stream = response.stream
-      console.log("[v0] Stream for existing chat:", !!stream, stream?.constructor?.name)
-      if (!stream) {
-        console.log("[v0] No stream available, returning JSON")
-        return NextResponse.json({ 
-          success: true, 
-          hasPendingChanges: true,
-          messageId,
-        })
-      }
-
-      console.log("[v0] Returning stream for existing chat")
-      // Proxy the raw v0 stream directly
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "X-Has-Pending-Changes": "true",
-          "X-Message-Id": messageId,
-        },
+      // Return success - client will reload messages after this
+      return NextResponse.json({ 
+        success: true, 
+        hasPendingChanges: true,
+        messageId,
+        completed: true, // Signal to client that v0 has finished processing
       })
     }
 
