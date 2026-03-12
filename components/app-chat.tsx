@@ -5,17 +5,14 @@ import { Send, Loader2, Sparkles, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Message as V0Message, StreamingMessage } from "@v0-sdk/react"
 import type { AppRecord } from "@/lib/types"
 
-interface Message {
+interface ChatMessage {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
-  integrationRequest?: {
-    type: string
-    name: string
-  }
 }
 
 interface AppChatProps {
@@ -31,7 +28,7 @@ const EXAMPLE_PROMPTS = [
 ]
 
 export function AppChat({ app, onAppUpdated }: AppChatProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
@@ -60,7 +57,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       const data = await res.json()
       
       if (data.messages && data.messages.length > 0) {
-        const formattedMessages: Message[] = data.messages.map((msg: { id: string; role: string; content: string; createdAt: string }) => ({
+        const formattedMessages: ChatMessage[] = data.messages.map((msg: { id: string; role: string; content: string; createdAt: string }) => ({
           id: msg.id || `msg_${Date.now()}_${Math.random()}`,
           role: msg.role as "user" | "assistant",
           content: msg.content,
@@ -69,14 +66,14 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         setMessages(formattedMessages)
       }
     } catch (err) {
-      console.error("[v0] Failed to load chat history:", err)
+      console.error("Failed to load chat history:", err)
     }
   }
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return
 
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: "user",
       content: input.trim(),
@@ -89,6 +86,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     setIsStreaming(true)
     setStreamingContent("")
     setError(null)
+    setPendingIntegration(null)
 
     try {
       const res = await fetch(`/api/apps/${app.id}/chat`, {
@@ -122,45 +120,41 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
               if (line.startsWith("data: ")) {
                 const data = line.slice(6).trim()
                 if (data === "[DONE]") {
-                  console.log("[v0] Stream finished, full content length:", fullContent.length)
                   continue
                 }
                 
                 try {
                   const event = JSON.parse(data)
-                  // Log event type for debugging (remove in production)
-                  if (event.type) console.log("[v0] Event:", event.type)
                   
-                  // Handle different event types from v0-sdk
-                  // The v0 SDK uses different event types for streaming
-                  if (event.type === "text" && event.text) {
-                    fullContent += event.text
+                  // Debug: log all events to understand structure
+                  console.log("[v0] Event received:", JSON.stringify(event).slice(0, 300))
+                  
+                  // v0-sdk streaming uses event.event === 'message' with event.data
+                  if (event.event === "message" && event.data) {
+                    // Append the chunk to full content for the streaming display
+                    fullContent += event.data
                     setStreamingContent(fullContent)
-                  } else if (event.type === "text_delta" && event.delta) {
-                    fullContent += event.delta
+                  } else if (event.type === "message" && event.data) {
+                    // Alternative format
+                    fullContent += event.data
                     setStreamingContent(fullContent)
-                  } else if (event.type === "content_block_delta" && event.delta?.text) {
-                    fullContent += event.delta.text
-                    setStreamingContent(fullContent)
-                  } else if (event.type === "message_delta" && event.content) {
-                    fullContent = event.content
-                    setStreamingContent(fullContent)
-                  } else if (event.type === "generation_started") {
-                    console.log("[v0] Generation started")
-                  } else if (event.type === "generation_complete") {
-                    console.log("[v0] Generation complete, versionId:", event.versionId)
-                  } else if (event.type === "integration_request" || event.type === "tool_use" || event.event === "integration_required") {
+                  } else if (event.event === "integration_required" || event.type === "integration_request") {
                     // v0 is waiting for an integration to be set up
-                    console.log("[v0] Integration requested:", event)
-                    const integrationName = event.name || event.integration || event.data?.name || "Unknown"
+                    const integrationName = event.name || event.integration || event.data?.name || "Database"
                     setPendingIntegration({ type: "database", name: integrationName })
+                  } else if (event.event === "error" || event.type === "error") {
+                    setError(event.message || event.data?.message || "An error occurred")
                   } else if (event.content && typeof event.content === "string") {
-                    // Fallback: if there's content, use it
+                    // Fallback: some events may have content directly
                     fullContent = event.content
+                    setStreamingContent(fullContent)
+                  } else if (event.text && typeof event.text === "string") {
+                    // Another fallback format
+                    fullContent += event.text
                     setStreamingContent(fullContent)
                   }
                 } catch (parseErr) {
-                  console.log("[v0] Parse error for data:", data.slice(0, 100), parseErr)
+                  console.log("[v0] Parse error:", parseErr, "for data:", data.slice(0, 100))
                 }
               }
             }
@@ -169,16 +163,15 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
         // Add assistant message from stream only if we have content
         if (fullContent && fullContent.trim().length > 0) {
-          const assistantMessage: Message = {
+          const assistantMessage: ChatMessage = {
             id: `assistant_${Date.now()}`,
             role: "assistant",
             content: fullContent,
             timestamp: new Date(),
           }
           setMessages(prev => [...prev, assistantMessage])
-        } else {
-          console.log("[v0] No streaming content received, refreshing chat history")
-          // If no content streamed, try to load chat history from server
+        } else if (!pendingIntegration) {
+          // If no content streamed and no pending integration, try to load chat history
           await loadChatHistory()
         }
       } else {
@@ -194,14 +187,14 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       onAppUpdated()
       
     } catch (err) {
-      console.error("[v0] Chat error:", err)
+      console.error("Chat error:", err)
       setError(err instanceof Error ? err.message : "Failed to send message")
     } finally {
       setIsLoading(false)
       setIsStreaming(false)
       setStreamingContent("")
     }
-  }, [input, isLoading, app.id, onAppUpdated])
+  }, [input, isLoading, app.id, onAppUpdated, pendingIntegration])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -267,23 +260,34 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                 key={message.id}
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted/50 border border-border/50"
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                </div>
+                {message.role === "user" ? (
+                  <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                ) : (
+                  <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
+                    {/* Use @v0-sdk/react Message component for proper rendering */}
+                    <V0Message 
+                      content={message.content} 
+                      messageId={message.id}
+                      role="assistant"
+                      className="text-sm"
+                    />
+                  </div>
+                )}
               </div>
             ))}
             
-            {/* Streaming message */}
+            {/* Streaming message using @v0-sdk/react StreamingMessage */}
             {isStreaming && streamingContent && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                  <p className="text-sm whitespace-pre-wrap">{streamingContent}</p>
+                  <V0Message 
+                    content={streamingContent}
+                    messageId="streaming"
+                    role="assistant"
+                    className="text-sm"
+                  />
                 </div>
               </div>
             )}
@@ -291,17 +295,24 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
             {/* Loading indicator with workflow status */}
             {isLoading && !streamingContent && !pendingIntegration && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {app.status === "building" ? (
-                      <>Building your app... (Step {app.currentStep}/5)</>
-                    ) : app.status === "iterating" ? (
-                      <>Processing changes...</>
-                    ) : (
-                      <>Thinking...</>
-                    )}
-                  </span>
+                <div className="flex flex-col gap-3 rounded-2xl px-4 py-3 bg-muted/50 border border-border/50 min-w-[200px]">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {app.status === "building" ? (
+                        <>Building your app...</>
+                      ) : app.status === "iterating" ? (
+                        <>Processing changes...</>
+                      ) : (
+                        <>Thinking...</>
+                      )}
+                    </span>
+                  </div>
+                  {app.status === "building" && app.currentStep > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      Step {app.currentStep} of 5
+                    </div>
+                  )}
                 </div>
               </div>
             )}
