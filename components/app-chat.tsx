@@ -4,20 +4,35 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { Send, Loader2, Sparkles, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Message, StreamingMessage } from "@v0-sdk/react"
+import { StreamingMessage } from "@v0-sdk/react"
 import type { AppRecord } from "@/lib/types"
 
 interface ChatMessage {
   id: string
   role: "user" | "assistant"
-  content: unknown // MessageBinaryFormat for assistant, raw text string for user (for display)
-  rawText?: string // Original text for user messages
+  content: string // Raw text for display
   createdAt: string
+  isStreaming?: boolean
+  stream?: ReadableStream<Uint8Array> | null
 }
 
 interface AppChatProps {
   app: AppRecord
   onAppUpdated: () => void
+}
+
+// Shared styling for StreamingMessage components
+const sharedComponents = {
+  p: { className: "mb-2 text-sm last:mb-0" },
+  h1: { className: "text-lg font-bold mb-2" },
+  h2: { className: "text-base font-semibold mb-2" },
+  h3: { className: "text-sm font-semibold mb-1" },
+  code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
+  pre: { className: "bg-muted p-3 rounded text-xs font-mono overflow-x-auto my-2" },
+  a: { className: "text-primary hover:underline" },
+  ul: { className: "list-disc list-inside space-y-1 mb-2 text-sm" },
+  ol: { className: "list-decimal list-inside space-y-1 mb-2 text-sm" },
+  blockquote: { className: "border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" },
 }
 
 const EXAMPLE_PROMPTS = [
@@ -27,20 +42,55 @@ const EXAMPLE_PROMPTS = [
   "Build a simple inventory management tool",
 ]
 
+// Helper to extract plain text from v0 message content
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === "string") return content
+  
+  // Handle {"version":1,"parts":[...]} format
+  if (content && typeof content === "object") {
+    const obj = content as Record<string, unknown>
+    
+    // Check for parts array
+    const parts = obj.parts || (Array.isArray(content) ? content : null)
+    if (Array.isArray(parts)) {
+      const texts: string[] = []
+      for (const part of parts) {
+        if (typeof part === "object" && part !== null) {
+          const p = part as Record<string, unknown>
+          // mdx type parts have content
+          if (p.type === "mdx" && typeof p.content === "string") {
+            texts.push(p.content)
+          }
+        }
+      }
+      if (texts.length > 0) return texts.join("\n\n")
+    }
+  }
+  
+  return ""
+}
+
 export function AppChat({ app, onAppUpdated }: AppChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [stream, setStream] = useState<ReadableStream<Uint8Array> | null>(null)
   const [error, setError] = useState<string | null>(null)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const streamingStartedRef = useRef(false)
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, stream])
+  }, [messages])
+
+  // Reset streaming flag when loading starts
+  useEffect(() => {
+    if (isLoading) {
+      streamingStartedRef.current = false
+    }
+  }, [isLoading])
 
   // Load chat history on mount
   useEffect(() => {
@@ -56,41 +106,20 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       
       const data = await res.json()
       if (data.messages?.length > 0) {
-        const formattedMessages: ChatMessage[] = data.messages.map((msg: {
-          id: string
-          role: string
-          content: string
-          createdAt: string
-        }) => {
-          // Content from v0.chats.findMessages() is a JSON string
-          const parsed = JSON.parse(msg.content)
-          
-          // The parts array is what we need (from {"version":1,"parts":[...]})
-          const parts = parsed.parts || parsed
-          
-          // Extract raw text for display - look for mdx parts specifically
-          let rawText: string | undefined
-          
-          if (Array.isArray(parts)) {
-            // Extract text from mdx type parts (e.g., {"type":"mdx","content":"..."})
-            const textParts = parts
-              .filter((p: unknown) => {
-                const part = p as Record<string, unknown>
-                return part.type === "mdx" && typeof part.content === "string"
-              })
-              .map((p: unknown) => (p as { content: string }).content)
+        const formattedMessages: ChatMessage[] = data.messages.map(
+          (msg: { id: string; role: string; content: string; createdAt: string }) => {
+            // Content from v0.chats.findMessages() is a JSON string
+            const parsed = JSON.parse(msg.content)
+            const text = extractTextFromContent(parsed)
             
-            rawText = textParts.join("\n\n").trim() || undefined
+            return {
+              id: msg.id,
+              role: msg.role as "user" | "assistant",
+              content: text || "[Message content]",
+              createdAt: msg.createdAt,
+            }
           }
-          
-          return {
-            id: msg.id,
-            role: msg.role as "user" | "assistant",
-            content: parts,
-            rawText,
-            createdAt: msg.createdAt,
-          }
-        })
+        )
         setMessages(formattedMessages)
       }
     } catch (err) {
@@ -102,21 +131,19 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     if (!input.trim() || isLoading) return
 
     const messageText = input.trim()
-    
-    // Create optimistic user message - store raw text for display
+
+    // Add user message immediately
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: "user",
-      content: null, // Will be populated from API later
-      rawText: messageText, // Store raw text for display
+      content: messageText,
       createdAt: new Date().toISOString(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
     setError(null)
-    setStream(null)
 
     try {
       const res = await fetch(`/api/apps/${app.id}/chat`, {
@@ -131,16 +158,24 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       }
 
       const contentType = res.headers.get("content-type")
-      
+
       if (contentType?.includes("application/octet-stream") && res.body) {
-        // We got a stream - use StreamingMessage
-        setStream(res.body)
+        // We got a stream - add streaming message
+        const streamingMessage: ChatMessage = {
+          id: `assistant_${Date.now()}`,
+          role: "assistant",
+          content: "",
+          createdAt: new Date().toISOString(),
+          isStreaming: true,
+          stream: res.body,
+        }
+        setMessages((prev) => [...prev, streamingMessage])
       } else {
         // JSON response - reload chat history
+        setIsLoading(false)
         await loadChatHistory()
         onAppUpdated()
       }
-
     } catch (err) {
       console.error("Chat error:", err)
       setError(err instanceof Error ? err.message : "Failed to send message")
@@ -148,40 +183,34 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     }
   }, [input, isLoading, app.id, onAppUpdated])
 
-  const handleStreamComplete = useCallback((content: unknown) => {
-    // Add completed message to the list
-    // Content from StreamingMessage onComplete has the full structure
-    const parsed = content as { parts?: unknown[] } | unknown[]
-    const parts = Array.isArray(parsed) ? parsed : ((parsed as { parts?: unknown[] }).parts || parsed)
-    
-    // Extract rawText from mdx parts
-    let rawText: string | undefined
-    if (Array.isArray(parts)) {
-      const textParts = parts
-        .filter((p: unknown) => {
-          const part = p as Record<string, unknown>
-          return part.type === "mdx" && typeof part.content === "string"
-        })
-        .map((p: unknown) => (p as { content: string }).content)
-      rawText = textParts.join("\n\n").trim() || undefined
+  const handleStreamingComplete = useCallback(
+    (finalContent: unknown) => {
+      const text = extractTextFromContent(finalContent)
+      
+      // Update streaming message with final content
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.isStreaming
+            ? { ...msg, content: text || "[Response complete]", isStreaming: false, stream: null }
+            : msg
+        )
+      )
+      setIsLoading(false)
+      onAppUpdated()
+    },
+    [onAppUpdated]
+  )
+
+  const handleStreamingStarted = useCallback(() => {
+    if (!streamingStartedRef.current) {
+      streamingStartedRef.current = true
     }
-    
-    const assistantMessage: ChatMessage = {
-      id: `assistant_${Date.now()}`,
-      role: "assistant",
-      content: parts,
-      rawText,
-      createdAt: new Date().toISOString(),
-    }
-    setMessages(prev => [...prev, assistantMessage])
-    setStream(null)
-    setIsLoading(false)
-    onAppUpdated()
-  }, [onAppUpdated])
+  }, [])
 
   const handleStreamError = useCallback((err: string) => {
     setError(err)
-    setStream(null)
+    // Remove streaming message on error
+    setMessages((prev) => prev.filter((msg) => !msg.isStreaming))
     setIsLoading(false)
   }, [])
 
@@ -203,7 +232,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     <div className="flex h-full flex-col">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 && !stream ? (
+        {messages.length === 0 && !isLoading ? (
           // Empty state with examples
           <div className="flex h-full flex-col items-center justify-center p-6 md:p-8">
             <div className="max-w-lg w-full space-y-8">
@@ -249,58 +278,39 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
               >
                 {message.role === "user" ? (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
-                    {/* User messages: render raw text directly */}
-                    <p className="text-sm whitespace-pre-wrap">
-                      {message.rawText || (message.content ? JSON.stringify(message.content) : "...")}
-                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                ) : message.isStreaming && message.stream ? (
+                  <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
+                    <StreamingMessage
+                      stream={message.stream}
+                      messageId={message.id}
+                      role="assistant"
+                      onComplete={handleStreamingComplete}
+                      onContentUpdate={handleStreamingStarted}
+                      onError={handleStreamError}
+                      components={sharedComponents}
+                      showLoadingIndicator={true}
+                      loadingComponent={<TypingIndicator />}
+                    />
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                    {/* Assistant messages: show raw text for now until we fix MessageBinaryFormat */}
-                    <p className="text-sm whitespace-pre-wrap">
-                      {message.rawText || (message.content ? JSON.stringify(message.content) : "...")}
-                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
                 )}
               </div>
             ))}
-            
-            {/* Streaming message */}
-            {stream && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                  <StreamingMessage
-                    stream={stream}
-                    messageId={`streaming-${Date.now()}`}
-                    role="assistant"
-                    showLoadingIndicator={true}
-                    loadingComponent={<TypingIndicator />}
-                    errorComponent={(err) => (
-                      <div className="text-destructive text-sm">{err}</div>
-                    )}
-                    onComplete={handleStreamComplete}
-                    onError={handleStreamError}
-                    components={{
-                      p: { className: "mb-2 text-sm last:mb-0" },
-                      h1: { className: "text-lg font-bold mb-2" },
-                      h2: { className: "text-base font-semibold mb-2" },
-                      code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
-                      a: { className: "text-primary hover:underline" },
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-            
-            {/* Loading indicator when waiting for stream */}
-            {isLoading && !stream && (
+
+            {/* Loading indicator when waiting for stream to start */}
+            {isLoading && !messages.some((m) => m.isStreaming) && (
               <div className="flex justify-start">
                 <div className="rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
                   <TypingIndicator />
                 </div>
               </div>
             )}
-            
+
             {/* Error message */}
             {error && (
               <div className="flex justify-start">
@@ -319,7 +329,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
         )}
