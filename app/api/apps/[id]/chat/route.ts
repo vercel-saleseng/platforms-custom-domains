@@ -32,10 +32,18 @@ export async function POST(
       // First message: create chat + trigger full build workflow
       await updateAppStatus(id, "building", 1)
       
-      // Create chat with v0 (streaming for first message)
-      const chat = await v0.chats.create({
+      // Create chat with v0 - with streaming, the return value IS the stream
+      const result = await v0.chats.create({
         message,
         responseMode: "experimental_stream",
+      })
+
+      // With experimental_stream, result is the ReadableStream directly
+      // We need to get the chat ID from a non-streaming call first, then stream
+      // Actually, let's use sync mode to get chat ID, then the workflow handles it
+      const chat = await v0.chats.create({
+        message,
+        responseMode: "sync",
       })
 
       // Update with chat ID
@@ -53,43 +61,42 @@ export async function POST(
         workflowRunId: run.runId,
       })
 
-      // Return the raw stream for real-time display
-      const stream = chat.stream
-      if (!stream) {
-        return NextResponse.json({ 
-          success: true, 
-          chatId: chat.id,
-          message: "Build started" 
-        })
-      }
-
-      // Proxy the raw v0 stream directly
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "X-Chat-Id": chat.id,
-          "X-Workflow-Run-Id": run.runId,
-        },
+      // Return success - client will poll and reload messages
+      return NextResponse.json({ 
+        success: true, 
+        chatId: chat.id,
+        workflowRunId: run.runId,
       })
 
     } else {
-      // Subsequent messages: send to existing chat
-      // Note: sendMessage does NOT support streaming - it's a blocking call
-      await v0.chats.sendMessage({
+      // Subsequent messages: send to existing chat with streaming
+      const stream = await v0.chats.sendMessage({
         chatId: app.v0ChatId!,
         message,
+        responseMode: "experimental_stream",
       })
 
       // Mark app as having pending changes
       const messageId = `msg_${Date.now()}`
       await markPendingChanges(id, messageId)
 
-      // Return success - client will reload messages after this
+      // With experimental_stream, the result IS the ReadableStream
+      if (stream instanceof ReadableStream) {
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        })
+      }
+
+      // Fallback if no stream
       return NextResponse.json({ 
         success: true, 
         hasPendingChanges: true,
         messageId,
-        completed: true, // Signal to client that v0 has finished processing
+        completed: true,
       })
     }
 

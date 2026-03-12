@@ -156,8 +156,9 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
       const contentType = res.headers.get("content-type")
 
-      if (contentType?.includes("application/octet-stream") && res.body) {
-        // First message returns a stream - add streaming indicator
+      // Check for streaming response (text/event-stream for sendMessage, octet-stream for create)
+      if ((contentType?.includes("text/event-stream") || contentType?.includes("application/octet-stream")) && res.body) {
+        // We got a stream - add streaming indicator
         const streamingMessage: ChatMessage = {
           id: `assistant_${Date.now()}`,
           role: "assistant",
