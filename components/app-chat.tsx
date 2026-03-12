@@ -60,13 +60,18 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
           role: string
           content: string
           createdAt: string
-        }) => ({
-          id: msg.id,
-          role: msg.role as "user" | "assistant",
-          // Content from v0.chats.findMessages() is a JSON string - parse it
-          content: JSON.parse(msg.content),
-          createdAt: msg.createdAt,
-        }))
+        }) => {
+          // Content from v0.chats.findMessages() is a JSON string
+          const parsed = JSON.parse(msg.content)
+          // The Message component expects the parts array, not the full object
+          const parts = parsed.parts || parsed
+          return {
+            id: msg.id,
+            role: msg.role as "user" | "assistant",
+            content: parts,
+            createdAt: msg.createdAt,
+          }
+        })
         setMessages(formattedMessages)
       }
     } catch (err) {
@@ -79,11 +84,11 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
     const messageText = input.trim()
     
-    // Create optimistic user message in MessageBinaryFormat
+    // Create optimistic user message - content should be the parts array
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: "user",
-      content: { version: 1, parts: [{ type: "mdx", content: messageText }] },
+      content: [{ type: "mdx", content: messageText }],
       createdAt: new Date().toISOString(),
     }
 
@@ -125,10 +130,14 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
   const handleStreamComplete = useCallback((content: unknown) => {
     // Add completed message to the list
+    // Content from StreamingMessage onComplete is the full object with parts
+    const parsed = content as { parts?: unknown[] } | unknown[]
+    const parts = Array.isArray(parsed) ? parsed : (parsed.parts || parsed)
+    
     const assistantMessage: ChatMessage = {
       id: `assistant_${Date.now()}`,
       role: "assistant",
-      content,
+      content: parts,
       createdAt: new Date().toISOString(),
     }
     setMessages(prev => [...prev, assistantMessage])
