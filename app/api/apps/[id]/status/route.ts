@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getById } from "workflow/api"
+import { getRun } from "workflow/api"
 import { getApp, getAppStepLabel } from "@/lib/apps-store"
 
 export const dynamic = "force-dynamic"
@@ -21,7 +21,7 @@ export async function GET(
     let workflowStatus = null
     if (app.workflowRunId) {
       try {
-        workflowStatus = await getById(app.workflowRunId)
+        workflowStatus = await getRun(app.workflowRunId)
       } catch {
         // Workflow not found or error - continue without it
       }
