@@ -11,9 +11,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  console.log("[v0] POST /api/apps/[id]/chat called, appId:", id)
   
   try {
-    const { message } = await request.json()
+    const body = await request.json()
+    console.log("[v0] Request body:", JSON.stringify(body).slice(0, 200))
+    const { message } = body
     
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -46,10 +49,12 @@ export async function POST(
 
       // For first message, we use streaming from v0 for immediate feedback
       // The workflow will handle the actual deployment
+      console.log("[v0] Creating chat with v0.chats.create...")
       const chat = await v0.chats.create({
         message,
         responseMode: "experimental_stream",
       })
+      console.log("[v0] Chat created, id:", chat.id, "has stream:", !!chat.stream)
 
       // Update with chat ID
       await updateApp(id, {

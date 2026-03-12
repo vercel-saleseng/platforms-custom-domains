@@ -89,31 +89,48 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     setPendingIntegration(null)
 
     try {
+      console.log("[v0] Sending message to API:", userMessage.content.slice(0, 50))
+      
       const res = await fetch(`/api/apps/${app.id}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage.content }),
       })
 
+      console.log("[v0] Response status:", res.status, res.statusText)
+      console.log("[v0] Response headers:", Object.fromEntries(res.headers.entries()))
+
       if (!res.ok) {
-        throw new Error("Failed to send message")
+        const errorText = await res.text()
+        console.log("[v0] Error response:", errorText)
+        throw new Error(`Failed to send message: ${res.status} ${errorText}`)
       }
 
       // Check if it's a streaming response
       const contentType = res.headers.get("content-type")
       
+      console.log("[v0] Content-Type:", contentType)
+      
       if (contentType?.includes("text/event-stream")) {
+        console.log("[v0] Handling SSE stream...")
         // Handle SSE stream
         const reader = res.body?.getReader()
         const decoder = new TextDecoder()
         let fullContent = ""
 
         if (reader) {
+          console.log("[v0] Reader obtained, starting to read...")
+          let chunkCount = 0
           while (true) {
             const { done, value } = await reader.read()
-            if (done) break
+            if (done) {
+              console.log("[v0] Stream done, total chunks:", chunkCount)
+              break
+            }
 
+            chunkCount++
             const chunk = decoder.decode(value, { stream: true })
+            console.log("[v0] Chunk #" + chunkCount + ":", chunk.slice(0, 200))
             const lines = chunk.split("\n")
 
             for (const line of lines) {
