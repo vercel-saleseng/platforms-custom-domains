@@ -13,8 +13,8 @@ export const viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Atlas - Create Personalized Sites',
-  description: 'Upload images and describe your vision. Create a custom, deployable website with a unique domain.',
+  title: 'Atlas - Build Internal Tools with AI',
+  description: 'Describe what you want to build and watch it come to life. Each app gets its own subdomain and can be iterated through chat.',
   generator: 'v0.app',
   icons: {
     icon: [

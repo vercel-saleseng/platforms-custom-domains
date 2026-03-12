@@ -11,7 +11,7 @@ export default function FlowchartPage() {
         {/* Header */}
         <div className="flex items-center gap-4 mb-12">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/">
+            <Link href="/legacy">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
