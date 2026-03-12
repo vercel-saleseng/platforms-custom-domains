@@ -12,6 +12,10 @@ interface Message {
   role: "user" | "assistant"
   content: string
   timestamp: Date
+  integrationRequest?: {
+    type: string
+    name: string
+  }
 }
 
 interface AppChatProps {
@@ -33,6 +37,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [pendingIntegration, setPendingIntegration] = useState<{ type: string; name: string } | null>(null)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -123,7 +128,8 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                 
                 try {
                   const event = JSON.parse(data)
-                  console.log("[v0] Received event:", event.type, event)
+                  // Log event type for debugging (remove in production)
+                  if (event.type) console.log("[v0] Event:", event.type)
                   
                   // Handle different event types from v0-sdk
                   // The v0 SDK uses different event types for streaming
@@ -143,6 +149,11 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                     console.log("[v0] Generation started")
                   } else if (event.type === "generation_complete") {
                     console.log("[v0] Generation complete, versionId:", event.versionId)
+                  } else if (event.type === "integration_request" || event.type === "tool_use" || event.event === "integration_required") {
+                    // v0 is waiting for an integration to be set up
+                    console.log("[v0] Integration requested:", event)
+                    const integrationName = event.name || event.integration || event.data?.name || "Unknown"
+                    setPendingIntegration({ type: "database", name: integrationName })
                   } else if (event.content && typeof event.content === "string") {
                     // Fallback: if there's content, use it
                     fullContent = event.content
@@ -278,7 +289,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
             )}
             
             {/* Loading indicator with workflow status */}
-            {isLoading && !streamingContent && (
+            {isLoading && !streamingContent && !pendingIntegration && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -291,6 +302,53 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                       <>Thinking...</>
                     )}
                   </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Pending integration request UI */}
+            {pendingIntegration && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl px-4 py-4 bg-muted/50 border border-border/50 space-y-3 max-w-md">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                      </svg>
+                    </div>
+                    <span className="font-medium text-foreground">{pendingIntegration.name}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    v0 wants to set up a database for this app. You can set it up in the v0 chat directly or skip it for now.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPendingIntegration(null)
+                        // Open v0 chat in new tab
+                        if (app.v0ChatId) {
+                          window.open(`https://v0.dev/chat/${app.v0ChatId}`, "_blank")
+                        }
+                      }}
+                    >
+                      Open in v0
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPendingIntegration(null)
+                        setIsLoading(false)
+                        setIsStreaming(false)
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
