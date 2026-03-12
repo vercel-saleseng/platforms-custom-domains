@@ -64,31 +64,24 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         }) => {
           // Content from v0.chats.findMessages() is a JSON string
           const parsed = JSON.parse(msg.content)
-          console.log("[v0] Parsed message content:", msg.role, JSON.stringify(parsed).slice(0, 500))
           
-          // The Message component expects the parts array, not the full object
+          // The parts array is what we need (from {"version":1,"parts":[...]})
           const parts = parsed.parts || parsed
           
-          // Extract raw text for display (works for both user and assistant)
+          // Extract raw text for display - look for mdx parts specifically
           let rawText: string | undefined
           
-          // Try to recursively find text content
-          const extractText = (obj: unknown): string => {
-            if (typeof obj === "string") return obj
-            if (Array.isArray(obj)) {
-              return obj.map(extractText).filter(Boolean).join("")
-            }
-            if (obj && typeof obj === "object") {
-              const o = obj as Record<string, unknown>
-              if (o.content && typeof o.content === "string") return o.content
-              if (o.text && typeof o.text === "string") return o.text
-              return Object.values(o).map(extractText).filter(Boolean).join("")
-            }
-            return ""
+          if (Array.isArray(parts)) {
+            // Extract text from mdx type parts (e.g., {"type":"mdx","content":"..."})
+            const textParts = parts
+              .filter((p: unknown) => {
+                const part = p as Record<string, unknown>
+                return part.type === "mdx" && typeof part.content === "string"
+              })
+              .map((p: unknown) => (p as { content: string }).content)
+            
+            rawText = textParts.join("\n\n").trim() || undefined
           }
-          
-          rawText = extractText(parts).trim() || undefined
-          console.log("[v0] Extracted rawText:", rawText?.slice(0, 100))
           
           return {
             id: msg.id,
@@ -157,14 +150,27 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
   const handleStreamComplete = useCallback((content: unknown) => {
     // Add completed message to the list
-    // Content from StreamingMessage onComplete is the full object with parts
+    // Content from StreamingMessage onComplete has the full structure
     const parsed = content as { parts?: unknown[] } | unknown[]
-    const parts = Array.isArray(parsed) ? parsed : (parsed.parts || parsed)
+    const parts = Array.isArray(parsed) ? parsed : ((parsed as { parts?: unknown[] }).parts || parsed)
+    
+    // Extract rawText from mdx parts
+    let rawText: string | undefined
+    if (Array.isArray(parts)) {
+      const textParts = parts
+        .filter((p: unknown) => {
+          const part = p as Record<string, unknown>
+          return part.type === "mdx" && typeof part.content === "string"
+        })
+        .map((p: unknown) => (p as { content: string }).content)
+      rawText = textParts.join("\n\n").trim() || undefined
+    }
     
     const assistantMessage: ChatMessage = {
       id: `assistant_${Date.now()}`,
       role: "assistant",
       content: parts,
+      rawText,
       createdAt: new Date().toISOString(),
     }
     setMessages(prev => [...prev, assistantMessage])
