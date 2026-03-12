@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { Send, Loader2, Sparkles, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { StreamingMessage } from "@v0-sdk/react"
+// StreamingMessage removed - we consume stream and reload instead
 import type { AppRecord } from "@/lib/types"
 
 interface ChatMessage {
@@ -21,19 +21,7 @@ interface AppChatProps {
   onAppUpdated: () => void
 }
 
-// Shared styling for StreamingMessage components
-const sharedComponents = {
-  p: { className: "mb-2 text-sm last:mb-0" },
-  h1: { className: "text-lg font-bold mb-2" },
-  h2: { className: "text-base font-semibold mb-2" },
-  h3: { className: "text-sm font-semibold mb-1" },
-  code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
-  pre: { className: "bg-muted p-3 rounded text-xs font-mono overflow-x-auto my-2" },
-  a: { className: "text-primary hover:underline" },
-  ul: { className: "list-disc list-inside space-y-1 mb-2 text-sm" },
-  ol: { className: "list-decimal list-inside space-y-1 mb-2 text-sm" },
-  blockquote: { className: "border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" },
-}
+
 
 const EXAMPLE_PROMPTS = [
   "Build a dashboard for tracking sales metrics",
@@ -74,6 +62,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(!!app.v0ChatId) // Start loading if chat exists
   const [error, setError] = useState<string | null>(null)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -96,13 +85,19 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
   useEffect(() => {
     if (app.v0ChatId) {
       loadChatHistory()
+    } else {
+      setIsLoadingHistory(false)
     }
   }, [app.v0ChatId])
 
   const loadChatHistory = async () => {
     try {
+      setIsLoadingHistory(true)
       const res = await fetch(`/api/apps/${app.id}/chat`)
-      if (!res.ok) return
+      if (!res.ok) {
+        setIsLoadingHistory(false)
+        return
+      }
       
       const data = await res.json()
       if (data.messages?.length > 0) {
@@ -124,6 +119,8 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       }
     } catch (err) {
       console.error("Failed to load chat history:", err)
+    } finally {
+      setIsLoadingHistory(false)
     }
   }
 
@@ -160,16 +157,31 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
       const contentType = res.headers.get("content-type")
 
       if (contentType?.includes("application/octet-stream") && res.body) {
-        // We got a stream - add streaming message
+        // We got a stream - add streaming indicator
         const streamingMessage: ChatMessage = {
           id: `assistant_${Date.now()}`,
           role: "assistant",
           content: "",
           createdAt: new Date().toISOString(),
           isStreaming: true,
-          stream: res.body,
         }
         setMessages((prev) => [...prev, streamingMessage])
+        
+        // Consume the stream in background
+        const reader = res.body.getReader()
+        try {
+          while (true) {
+            const { done } = await reader.read()
+            if (done) break
+          }
+        } catch (e) {
+          console.error("Stream error:", e)
+        }
+        
+        // Stream complete - reload messages
+        setIsLoading(false)
+        await loadChatHistory()
+        onAppUpdated()
       } else {
         // JSON response - reload chat history
         setIsLoading(false)
@@ -183,36 +195,7 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     }
   }, [input, isLoading, app.id, onAppUpdated])
 
-  const handleStreamingComplete = useCallback(
-    (finalContent: unknown) => {
-      const text = extractTextFromContent(finalContent)
-      
-      // Update streaming message with final content
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.isStreaming
-            ? { ...msg, content: text || "[Response complete]", isStreaming: false, stream: null }
-            : msg
-        )
-      )
-      setIsLoading(false)
-      onAppUpdated()
-    },
-    [onAppUpdated]
-  )
 
-  const handleStreamingStarted = useCallback(() => {
-    if (!streamingStartedRef.current) {
-      streamingStartedRef.current = true
-    }
-  }, [])
-
-  const handleStreamError = useCallback((err: string) => {
-    setError(err)
-    // Remove streaming message on error
-    setMessages((prev) => prev.filter((msg) => !msg.isStreaming))
-    setIsLoading(false)
-  }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -232,7 +215,13 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
     <div className="flex h-full flex-col">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 && !isLoading ? (
+        {isLoadingHistory ? (
+          // Loading chat history
+          <div className="flex h-full flex-col items-center justify-center p-6">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="mt-3 text-sm text-muted-foreground">Loading conversation...</p>
+          </div>
+        ) : messages.length === 0 && !isLoading ? (
           // Empty state with examples
           <div className="flex h-full flex-col items-center justify-center p-6 md:p-8">
             <div className="max-w-lg w-full space-y-8">
@@ -280,19 +269,9 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
-                ) : message.isStreaming && message.stream ? (
+                ) : message.isStreaming ? (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                    <StreamingMessage
-                      stream={message.stream}
-                      messageId={message.id}
-                      role="assistant"
-                      onComplete={handleStreamingComplete}
-                      onContentUpdate={handleStreamingStarted}
-                      onError={handleStreamError}
-                      components={sharedComponents}
-                      showLoadingIndicator={true}
-                      loadingComponent={<TypingIndicator />}
-                    />
+                    <TypingIndicator />
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
