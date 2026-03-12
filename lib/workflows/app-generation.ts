@@ -1,12 +1,12 @@
 "use workflow"
 
-import { updateAppStatus } from "../apps-store"
 import {
   createV0App,
   deployApp,
   disableDeploymentProtection,
   assignAppDomain,
   markAppComplete,
+  markAppError,
   getAppForWorkflow,
 } from "./app-steps"
 
@@ -75,9 +75,10 @@ export async function appGenerationWorkflow(
       domain: fullDomain,
     }
   } catch (error) {
-    const message =
+    const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred"
-    await updateAppStatus(appId, "error", -1, { error: message })
+    // Use a step function for the error update
+    await markAppError(appId, errorMessage)
     throw error
   }
 }

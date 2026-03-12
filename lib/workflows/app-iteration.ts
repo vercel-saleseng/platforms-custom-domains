@@ -1,10 +1,12 @@
 "use workflow"
 
-import { updateAppStatus, clearPendingChanges } from "../apps-store"
 import {
   deployApp,
   disableDeploymentProtection,
   getAppForWorkflow,
+  updateAppStatusStep,
+  clearPendingChangesStep,
+  markAppError,
 } from "./app-steps"
 
 export interface AppIterationDeployInput {
@@ -34,7 +36,7 @@ export async function appIterationDeployWorkflow(
       throw new Error("App has not been built yet")
     }
 
-    await updateAppStatus(appId, "building", 3)
+    await updateAppStatusStep(appId, "building", 3)
 
     // Deploy the latest version
     const { deploymentUrl, vercelProjectId } = await deployApp(
@@ -48,11 +50,11 @@ export async function appIterationDeployWorkflow(
     await disableDeploymentProtection(vercelProjectId)
 
     // Clear pending changes
-    await clearPendingChanges(appId)
+    await clearPendingChangesStep(appId)
 
     // Update to deployed status
     const finalUrl = app.previewUrl || deploymentUrl
-    await updateAppStatus(appId, "deployed", 5, {
+    await updateAppStatusStep(appId, "deployed", 5, {
       previewUrl: finalUrl,
       vercelProjectId: vercelProjectId || app.vercelProjectId,
     })
@@ -63,9 +65,9 @@ export async function appIterationDeployWorkflow(
       previewUrl: finalUrl,
     }
   } catch (error) {
-    const message =
+    const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred"
-    await updateAppStatus(appId, "error", -1, { error: message })
+    await markAppError(appId, errorMessage)
     throw error
   }
 }

@@ -1,7 +1,8 @@
 "use step"
 
 import { v0 } from "../v0-client"
-import { updateAppStatus, getApp, deleteApp } from "../apps-store"
+import { updateAppStatus, getApp, deleteApp, clearPendingChanges } from "../apps-store"
+import type { AppStatus } from "../types"
 import type { ChatDetail } from "v0-sdk"
 
 // Step 1: Create v0 project and chat, wait for generation
@@ -243,4 +244,24 @@ export async function sendIterationMessage(
 // Get app for workflow access
 export async function getAppForWorkflow(appId: string) {
   return await getApp(appId)
+}
+
+// Mark app as error (step function for workflow error handling)
+export async function markAppError(appId: string, errorMessage: string): Promise<void> {
+  await updateAppStatus(appId, "error", -1, { error: errorMessage })
+}
+
+// Generic update status step function (for use in workflows)
+export async function updateAppStatusStep(
+  appId: string,
+  status: AppStatus,
+  step: number,
+  updates?: Record<string, unknown>
+): Promise<void> {
+  await updateAppStatus(appId, status, step, updates)
+}
+
+// Clear pending changes step function (for use in workflows)
+export async function clearPendingChangesStep(appId: string): Promise<void> {
+  await clearPendingChanges(appId)
 }
