@@ -64,8 +64,14 @@ export function AppPreview({ app }: AppPreviewProps) {
     )
   }
 
-  // Building/Iterating
+  // Building/Iterating - but check if stuck
   if (isBuilding) {
+    // Check if potentially stuck (building for too long without progress)
+    const updatedAt = new Date(app.updatedAt).getTime()
+    const now = Date.now()
+    const stuckThreshold = 5 * 60 * 1000 // 5 minutes
+    const isPotentiallyStuck = (now - updatedAt) > stuckThreshold
+    
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8 animate-fade-up">
         <div className="relative">
@@ -79,6 +85,23 @@ export function AppPreview({ app }: AppPreviewProps) {
             {app.status === "iterating" ? "Processing changes..." : "Building your app..."}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">This may take a minute</p>
+          {isPotentiallyStuck && (
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Taking longer than expected? The workflow may have encountered an issue.
+              </p>
+              {app.v0ChatId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(`https://v0.dev/chat/${app.v0ChatId}`, "_blank")}
+                >
+                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                  Check v0 Chat
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )

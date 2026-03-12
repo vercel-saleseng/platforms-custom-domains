@@ -3,7 +3,7 @@
 import { use, useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { MessageSquare, Monitor, Settings, Loader2, ArrowLeft, Layers } from "lucide-react"
+import { MessageSquare, Monitor, Settings, Loader2, ArrowLeft, Layers, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AppChat } from "@/components/app-chat"
@@ -114,10 +114,29 @@ export default function AppPage({
           </div>
         </div>
         
-        {/* Deploy button when there are pending changes */}
-        {app.hasPendingChanges && (
-          <DeployButton appId={app.id} onDeployStarted={handleAppUpdated} />
-        )}
+        <div className="flex items-center gap-3">
+          {/* Show link to v0 chat when app has been built */}
+          {app.v0ChatId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => window.open(`https://v0.dev/chat/${app.v0ChatId}`, "_blank")}
+            >
+              Open in v0
+            </Button>
+          )}
+          
+          {/* Status indicator */}
+          {!app.previewUrl && app.status !== "created" && app.status !== "building" && (
+            <span className="text-sm text-destructive">App has not been built yet</span>
+          )}
+          
+          {/* Deploy button when there are pending changes */}
+          {app.hasPendingChanges && (
+            <DeployButton appId={app.id} onDeployStarted={handleAppUpdated} />
+          )}
+        </div>
       </header>
 
       {/* Tabs */}
