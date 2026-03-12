@@ -3,7 +3,6 @@ import { start } from "workflow/api"
 import { v0 } from "@/lib/v0-client"
 import { getApp, updateApp, updateAppStatus, markPendingChanges } from "@/lib/apps-store"
 import { appGenerationWorkflow } from "@/lib/workflows/app-generation"
-import { parseStreamingResponse } from "v0-sdk"
 
 // POST /api/apps/[id]/chat - Send a chat message
 export async function POST(
@@ -11,12 +10,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  console.log("[v0] POST /api/apps/[id]/chat called, appId:", id)
   
   try {
-    const body = await request.json()
-    console.log("[v0] Request body:", JSON.stringify(body).slice(0, 200))
-    const { message } = body
+    const { message } = await request.json()
     
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -34,78 +30,50 @@ export async function POST(
 
     if (isFirstMessage) {
       // First message: create chat + trigger full build workflow
-      await updateAppStatus(id, "building", 0)
+      await updateAppStatus(id, "building", 1)
       
-      // Start the durable workflow for initial build
-      const run = await start(appGenerationWorkflow, [{ 
-        appId: id, 
-        message,
-      }])
-
-      // Store the workflow run ID
-      await updateApp(id, {
-        workflowRunId: run.runId,
-      })
-
-      // For first message, we use streaming from v0 for immediate feedback
-      // The workflow will handle the actual deployment
-      console.log("[v0] Creating chat with v0.chats.create...")
+      // Create chat with v0
       const chat = await v0.chats.create({
         message,
         responseMode: "experimental_stream",
       })
-      console.log("[v0] Chat created, id:", chat.id, "has stream:", !!chat.stream)
 
       // Update with chat ID
       await updateApp(id, {
         v0ChatId: chat.id,
       })
 
-      // Stream the response back
+      // Start the durable workflow for deployment
+      const run = await start(appGenerationWorkflow, [{ 
+        appId: id, 
+        message,
+      }])
+
+      await updateApp(id, {
+        workflowRunId: run.runId,
+      })
+
+      // Return the raw stream for StreamingMessage component
       const stream = chat.stream
       if (!stream) {
         return NextResponse.json({ 
           success: true, 
           chatId: chat.id,
-          workflowRunId: run.runId,
           message: "Build started" 
         })
       }
 
-      // Transform the v0 stream for the client
-      const transformedStream = new ReadableStream({
-        async start(controller) {
-          try {
-            console.log("[v0] Starting to parse streaming response...")
-            let eventCount = 0
-            for await (const event of parseStreamingResponse(stream)) {
-              eventCount++
-              // Log full event structure to understand format
-              console.log("[v0] Stream event:", JSON.stringify(event).slice(0, 500))
-              controller.enqueue(
-                new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
-              )
-            }
-            console.log("[v0] Stream complete, total events:", eventCount)
-            controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`))
-            controller.close()
-          } catch (error) {
-            console.error("[v0] Stream error:", error)
-            controller.error(error)
-          }
-        },
-      })
-
-      return new Response(transformedStream, {
+      // Proxy the raw v0 stream directly
+      return new Response(stream, {
         headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
+          "Content-Type": "application/octet-stream",
+          "X-Chat-Id": chat.id,
+          "X-Workflow-Run-Id": run.runId,
         },
       })
 
     } else {
-      // Subsequent messages: send to existing chat, stage changes
+      // Subsequent messages: send to existing chat
       const response = await v0.chats.sendMessage({
         chatId: app.v0ChatId!,
         message,
@@ -123,7 +91,6 @@ export async function POST(
         })
       }
 
-      // Stream the response back
       const stream = response.stream
       if (!stream) {
         return NextResponse.json({ 
@@ -133,49 +100,25 @@ export async function POST(
         })
       }
 
-      // Transform the v0 stream for the client
-      const transformedStream = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const event of parseStreamingResponse(stream)) {
-              // Update version ID when we get it from the stream
-              if (event.type === "generation_complete" && event.versionId) {
-                await updateApp(id, {
-                  v0VersionId: event.versionId,
-                })
-              }
-              controller.enqueue(
-                new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
-              )
-            }
-            controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`))
-            controller.close()
-          } catch (error) {
-            console.error("[v0] Stream error:", error)
-            controller.error(error)
-          }
-        },
-      })
-
-      return new Response(transformedStream, {
+      // Proxy the raw v0 stream directly
+      return new Response(stream, {
         headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
+          "Content-Type": "application/octet-stream",
+          "X-Has-Pending-Changes": "true",
+          "X-Message-Id": messageId,
         },
       })
     }
 
   } catch (error) {
-    console.error("[v0] POST /api/apps/[id]/chat: error:", error)
+    console.error("[v0] Chat error:", error)
     
-    // Update app status to error
     await updateAppStatus(id, "error", -1, {
       error: error instanceof Error ? error.message : "Chat failed",
     })
 
     return NextResponse.json(
-      { error: "Failed to process chat message" },
+      { error: error instanceof Error ? error.message : "Failed to process chat message" },
       { status: 500 }
     )
   }
@@ -195,20 +138,19 @@ export async function GET(
     }
 
     if (!app.v0ChatId) {
-      // No chat yet - return empty messages
       return NextResponse.json({ messages: [] })
     }
 
-    // Fetch chat history from v0
-    const chat = await v0.chats.getById({ chatId: app.v0ChatId })
+    // Fetch chat with messages from v0
+    const messages = await v0.chats.findMessages({ chatId: app.v0ChatId })
     
     return NextResponse.json({ 
-      chat,
-      messages: chat.messages || [],
+      chatId: app.v0ChatId,
+      messages: messages.data || [],
     })
 
   } catch (error) {
-    console.error("[v0] GET /api/apps/[id]/chat: error:", error)
+    console.error("[v0] GET chat error:", error)
     return NextResponse.json(
       { error: "Failed to fetch chat history" },
       { status: 500 }
