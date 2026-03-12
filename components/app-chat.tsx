@@ -5,7 +5,7 @@ import { Send, Loader2, Sparkles, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Message as V0Message, StreamingMessage } from "@v0-sdk/react"
+// Note: @v0-sdk/react is available but we use simple rendering for reliability
 import type { AppRecord } from "@/lib/types"
 
 interface ChatMessage {
@@ -28,6 +28,8 @@ const EXAMPLE_PROMPTS = [
 ]
 
 export function AppChat({ app, onAppUpdated }: AppChatProps) {
+  console.log("[v0] AppChat rendered, app.id:", app.id, "v0ChatId:", app.v0ChatId)
+  
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -71,7 +73,11 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
   }
 
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading) return
+    console.log("[v0] sendMessage called, input:", input.slice(0, 50), "isLoading:", isLoading)
+    if (!input.trim() || isLoading) {
+      console.log("[v0] sendMessage aborted - empty input or loading")
+      return
+    }
 
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
@@ -283,28 +289,17 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                    {/* Use @v0-sdk/react Message component for proper rendering */}
-                    <V0Message 
-                      content={message.content} 
-                      messageId={message.id}
-                      role="assistant"
-                      className="text-sm"
-                    />
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
                 )}
               </div>
             ))}
             
-            {/* Streaming message using @v0-sdk/react StreamingMessage */}
+            {/* Streaming message */}
             {isStreaming && streamingContent && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                  <V0Message 
-                    content={streamingContent}
-                    messageId="streaming"
-                    role="assistant"
-                    className="text-sm"
-                  />
+                  <p className="text-sm whitespace-pre-wrap">{streamingContent}</p>
                 </div>
               </div>
             )}
