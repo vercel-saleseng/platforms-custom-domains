@@ -115,34 +115,49 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
             for (const line of lines) {
               if (line.startsWith("data: ")) {
-                const data = line.slice(6)
-                if (data === "[DONE]") continue
+                const data = line.slice(6).trim()
+                if (data === "[DONE]") {
+                  console.log("[v0] Stream finished, full content length:", fullContent.length)
+                  continue
+                }
                 
                 try {
                   const event = JSON.parse(data)
+                  console.log("[v0] Received event:", event.type, event)
                   
                   // Handle different event types from v0-sdk
-                  if (event.type === "text_delta" || event.type === "content_block_delta") {
-                    const delta = event.delta || event.text || ""
-                    fullContent += delta
+                  // The v0 SDK uses different event types for streaming
+                  if (event.type === "text" && event.text) {
+                    fullContent += event.text
+                    setStreamingContent(fullContent)
+                  } else if (event.type === "text_delta" && event.delta) {
+                    fullContent += event.delta
+                    setStreamingContent(fullContent)
+                  } else if (event.type === "content_block_delta" && event.delta?.text) {
+                    fullContent += event.delta.text
                     setStreamingContent(fullContent)
                   } else if (event.type === "message_delta" && event.content) {
                     fullContent = event.content
                     setStreamingContent(fullContent)
-                  } else if (event.content) {
+                  } else if (event.type === "generation_started") {
+                    console.log("[v0] Generation started")
+                  } else if (event.type === "generation_complete") {
+                    console.log("[v0] Generation complete, versionId:", event.versionId)
+                  } else if (event.content && typeof event.content === "string") {
+                    // Fallback: if there's content, use it
                     fullContent = event.content
                     setStreamingContent(fullContent)
                   }
-                } catch {
-                  // Ignore parse errors for incomplete JSON
+                } catch (parseErr) {
+                  console.log("[v0] Parse error for data:", data.slice(0, 100), parseErr)
                 }
               }
             }
           }
         }
 
-        // Add assistant message from stream
-        if (fullContent) {
+        // Add assistant message from stream only if we have content
+        if (fullContent && fullContent.trim().length > 0) {
           const assistantMessage: Message = {
             id: `assistant_${Date.now()}`,
             role: "assistant",
@@ -150,6 +165,10 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
             timestamp: new Date(),
           }
           setMessages(prev => [...prev, assistantMessage])
+        } else {
+          console.log("[v0] No streaming content received, refreshing chat history")
+          // If no content streamed, try to load chat history from server
+          await loadChatHistory()
         }
       } else {
         // Handle JSON response
@@ -258,12 +277,20 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
               </div>
             )}
             
-            {/* Loading indicator */}
+            {/* Loading indicator with workflow status */}
             {isLoading && !streamingContent && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Thinking...</span>
+                  <span className="text-sm text-muted-foreground">
+                    {app.status === "building" ? (
+                      <>Building your app... (Step {app.currentStep}/5)</>
+                    ) : app.status === "iterating" ? (
+                      <>Processing changes...</>
+                    ) : (
+                      <>Thinking...</>
+                    )}
+                  </span>
                 </div>
               </div>
             )}

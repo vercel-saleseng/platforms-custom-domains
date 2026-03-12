@@ -71,11 +71,16 @@ export async function POST(
       const transformedStream = new ReadableStream({
         async start(controller) {
           try {
+            console.log("[v0] Starting to parse streaming response...")
+            let eventCount = 0
             for await (const event of parseStreamingResponse(stream)) {
+              eventCount++
+              console.log("[v0] Stream event:", event.type, JSON.stringify(event).slice(0, 200))
               controller.enqueue(
                 new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
               )
             }
+            console.log("[v0] Stream complete, total events:", eventCount)
             controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`))
             controller.close()
           } catch (error) {
