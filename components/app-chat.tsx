@@ -64,21 +64,31 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
         }) => {
           // Content from v0.chats.findMessages() is a JSON string
           const parsed = JSON.parse(msg.content)
+          console.log("[v0] Parsed message content:", msg.role, JSON.stringify(parsed).slice(0, 500))
+          
           // The Message component expects the parts array, not the full object
           const parts = parsed.parts || parsed
           
-          // For user messages, extract the raw text for display
+          // Extract raw text for display (works for both user and assistant)
           let rawText: string | undefined
-          if (msg.role === "user" && Array.isArray(parts)) {
-            // Try to extract text from the first MDX part
-            const mdxPart = parts.find((p: [number, ...unknown[]]) => p[0] === 0)
-            if (mdxPart && Array.isArray(mdxPart[1])) {
-              const textPart = mdxPart[1].find((el: unknown) => 
-                Array.isArray(el) && el[0] === "p" && typeof el[2] === "string"
-              )
-              if (textPart) rawText = textPart[2] as string
+          
+          // Try to recursively find text content
+          const extractText = (obj: unknown): string => {
+            if (typeof obj === "string") return obj
+            if (Array.isArray(obj)) {
+              return obj.map(extractText).filter(Boolean).join("")
             }
+            if (obj && typeof obj === "object") {
+              const o = obj as Record<string, unknown>
+              if (o.content && typeof o.content === "string") return o.content
+              if (o.text && typeof o.text === "string") return o.text
+              return Object.values(o).map(extractText).filter(Boolean).join("")
+            }
+            return ""
           }
+          
+          rawText = extractText(parts).trim() || undefined
+          console.log("[v0] Extracted rawText:", rawText?.slice(0, 100))
           
           return {
             id: msg.id,
@@ -234,29 +244,16 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
                 {message.role === "user" ? (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
                     {/* User messages: render raw text directly */}
-                    <p className="text-sm whitespace-pre-wrap">{message.rawText || String(message.content)}</p>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {message.rawText || (message.content ? JSON.stringify(message.content) : "...")}
+                    </p>
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                    {/* Assistant messages: use Message component for MessageBinaryFormat */}
-                    {message.content && Array.isArray(message.content) ? (
-                      <Message
-                        content={message.content}
-                        messageId={message.id}
-                        role="assistant"
-                        components={{
-                          p: { className: "mb-2 text-sm last:mb-0" },
-                          h1: { className: "text-lg font-bold mb-2" },
-                          h2: { className: "text-base font-semibold mb-2" },
-                          code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
-                          a: { className: "text-primary hover:underline" },
-                          ul: { className: "list-disc list-inside space-y-1 mb-2 text-sm" },
-                          ol: { className: "list-decimal list-inside space-y-1 mb-2 text-sm" },
-                        }}
-                      />
-                    ) : (
-                      <p className="text-sm">{String(message.content)}</p>
-                    )}
+                    {/* Assistant messages: show raw text for now until we fix MessageBinaryFormat */}
+                    <p className="text-sm whitespace-pre-wrap">
+                      {message.rawText || (message.content ? JSON.stringify(message.content) : "...")}
+                    </p>
                   </div>
                 )}
               </div>
