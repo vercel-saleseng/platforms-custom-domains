@@ -10,7 +10,8 @@ import type { AppRecord } from "@/lib/types"
 interface ChatMessage {
   id: string
   role: "user" | "assistant"
-  content: unknown // MessageBinaryFormat for assistant, string for user
+  content: unknown // MessageBinaryFormat for assistant, raw text string for user (for display)
+  rawText?: string // Original text for user messages
   createdAt: string
 }
 
@@ -65,10 +66,25 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
           const parsed = JSON.parse(msg.content)
           // The Message component expects the parts array, not the full object
           const parts = parsed.parts || parsed
+          
+          // For user messages, extract the raw text for display
+          let rawText: string | undefined
+          if (msg.role === "user" && Array.isArray(parts)) {
+            // Try to extract text from the first MDX part
+            const mdxPart = parts.find((p: [number, ...unknown[]]) => p[0] === 0)
+            if (mdxPart && Array.isArray(mdxPart[1])) {
+              const textPart = mdxPart[1].find((el: unknown) => 
+                Array.isArray(el) && el[0] === "p" && typeof el[2] === "string"
+              )
+              if (textPart) rawText = textPart[2] as string
+            }
+          }
+          
           return {
             id: msg.id,
             role: msg.role as "user" | "assistant",
             content: parts,
+            rawText,
             createdAt: msg.createdAt,
           }
         })
@@ -84,11 +100,12 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
 
     const messageText = input.trim()
     
-    // Create optimistic user message - content should be the parts array
+    // Create optimistic user message - store raw text for display
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: "user",
-      content: [{ type: "mdx", content: messageText }],
+      content: null, // Will be populated from API later
+      rawText: messageText, // Store raw text for display
       createdAt: new Date().toISOString(),
     }
 
@@ -216,31 +233,30 @@ export function AppChat({ app, onAppUpdated }: AppChatProps) {
               >
                 {message.role === "user" ? (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
-                    <Message
-                      content={message.content}
-                      messageId={message.id}
-                      role="user"
-                      components={{
-                        p: { className: "text-sm" },
-                      }}
-                    />
+                    {/* User messages: render raw text directly */}
+                    <p className="text-sm whitespace-pre-wrap">{message.rawText || String(message.content)}</p>
                   </div>
                 ) : (
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-muted/50 border border-border/50">
-                    <Message
-                      content={message.content}
-                      messageId={message.id}
-                      role="assistant"
-                      components={{
-                        p: { className: "mb-2 text-sm last:mb-0" },
-                        h1: { className: "text-lg font-bold mb-2" },
-                        h2: { className: "text-base font-semibold mb-2" },
-                        code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
-                        a: { className: "text-primary hover:underline" },
-                        ul: { className: "list-disc list-inside space-y-1 mb-2 text-sm" },
-                        ol: { className: "list-decimal list-inside space-y-1 mb-2 text-sm" },
-                      }}
-                    />
+                    {/* Assistant messages: use Message component for MessageBinaryFormat */}
+                    {message.content && Array.isArray(message.content) ? (
+                      <Message
+                        content={message.content}
+                        messageId={message.id}
+                        role="assistant"
+                        components={{
+                          p: { className: "mb-2 text-sm last:mb-0" },
+                          h1: { className: "text-lg font-bold mb-2" },
+                          h2: { className: "text-base font-semibold mb-2" },
+                          code: { className: "bg-muted px-1.5 py-0.5 rounded text-xs font-mono" },
+                          a: { className: "text-primary hover:underline" },
+                          ul: { className: "list-disc list-inside space-y-1 mb-2 text-sm" },
+                          ol: { className: "list-decimal list-inside space-y-1 mb-2 text-sm" },
+                        }}
+                      />
+                    ) : (
+                      <p className="text-sm">{String(message.content)}</p>
+                    )}
                   </div>
                 )}
               </div>
