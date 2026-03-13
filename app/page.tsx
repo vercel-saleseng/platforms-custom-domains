@@ -3,217 +3,210 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { mutate } from "swr"
-import { Menu, Layers, Plus, Globe, Loader2, ArrowRight } from "lucide-react"
+import { Layers, Plus, Loader2, ArrowRight, Globe, Clock, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
-import { AppSidebar } from "@/components/app-sidebar"
-import type { SiteRecord } from "@/lib/types"
+import type { AppRecord } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
-const MOBILE_BREAKPOINT = 768
 
 export default function Home() {
   const router = useRouter()
-  const [isMobile, setIsMobile] = useState<boolean | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
 
-  // Detect mobile and set sidebar state
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < MOBILE_BREAKPOINT
-      setIsMobile(mobile)
-      if (mobile) setSidebarOpen(false)
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  // Fetch all sites
-  const { data: sitesData } = useSWR<{ sites: SiteRecord[] }>(
-    "/api/sites",
+  // Fetch all apps
+  const { data: appsData, isLoading } = useSWR<{ apps: AppRecord[] }>(
+    "/api/apps",
     fetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 10000 }
   )
-  const sites = sitesData?.sites || []
+  const apps = appsData?.apps || []
 
-  const handleNewSite = useCallback(async () => {
+  const handleNewApp = useCallback(async () => {
     setIsCreating(true)
     try {
-      const response = await fetch("/api/sites/new", { method: "POST" })
+      const response = await fetch("/api/apps", { method: "POST" })
       const data = await response.json()
-      if (data.siteId) {
-        mutate("/api/sites")
-        router.push(`/site/${data.siteId}`)
+      if (data.appId) {
+        mutate("/api/apps")
+        router.push(`/apps/${data.appId}`)
       }
     } catch (error) {
-      console.error("Failed to create site:", error)
+      console.error("Failed to create app:", error)
     } finally {
       setIsCreating(false)
     }
-    if (isMobile) setSidebarOpen(false)
-  }, [router, isMobile])
+  }, [router])
 
-  const handleSelectSite = useCallback(
-    (id: string) => {
-      if (isMobile) setSidebarOpen(false)
-      // Small delay to let sheet close animation start before navigation
-      setTimeout(() => {
-        router.push(`/site/${id}`)
-      }, 50)
-    },
-    [router, isMobile]
-  )
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "deployed":
+        return (
+          <span className="flex items-center gap-1.5 text-xs text-success">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            Live
+          </span>
+        )
+      case "building":
+      case "iterating":
+        return (
+          <span className="flex items-center gap-1.5 text-xs text-chart-4">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Building
+          </span>
+        )
+      case "error":
+        return (
+          <span className="flex items-center gap-1.5 text-xs text-destructive">
+            <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+            Error
+          </span>
+        )
+      default:
+        return (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+            Draft
+          </span>
+        )
+    }
+  }
 
-  const sidebarContent = (
-    <AppSidebar
-      sites={sites}
-      activeSiteId={null}
-      onSelectSite={handleSelectSite}
-      onNewSite={handleNewSite}
-    />
-  )
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
 
-  // Don't render sidebar until we know mobile state
-  if (isMobile === null) {
-    return (
-      <div className="flex h-[100dvh] overflow-hidden bg-background">
-        <main className="flex flex-1 flex-col overflow-hidden" />
-      </div>
-    )
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
-      {/* Desktop Sidebar */}
-      {!isMobile && sidebarOpen && sidebarContent}
-
-      {/* Mobile Sidebar Sheet */}
-      {isMobile && (
-        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-[280px] p-0 border-r border-sidebar-border">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            {sidebarContent}
-          </SheetContent>
-        </Sheet>
-      )}
-
-      {/* Main Content */}
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <div className="flex items-center border-b border-border/50 px-4 py-3 md:px-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-smooth"
-            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-          >
-            <Menu className="h-5 w-5" />
+    <div className="min-h-[100dvh] bg-background">
+      {/* Header */}
+      <header className="border-b border-border/50">
+        <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+              <Layers className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-lg font-semibold tracking-tight">Atlas</span>
+          </div>
+          <Button onClick={handleNewApp} disabled={isCreating} className="gap-2">
+            {isCreating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Build an App
+              </>
+            )}
           </Button>
-          <div className="ml-3 flex items-center gap-2.5 md:hidden">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-              <Layers className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight">Atlas</span>
-          </div>
         </div>
+      </header>
 
-        {/* Content area */}
-        <div className="relative flex flex-1 items-center justify-center overflow-y-auto">
-          {/* Background gradient orb */}
-          <div className="pointer-events-none absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary/5 blur-3xl animate-glow-pulse" />
-          
-          <div className="relative z-10 w-full max-w-lg px-6 py-8 md:px-8 md:py-16">
-            <div className="flex flex-col items-center gap-8 text-center animate-fade-up">
-              {/* Hero Icon */}
-              <div className="relative">
-                <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-xl animate-glow-pulse" />
-                <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 shadow-lg">
-                  <Layers className="h-10 w-10 text-primary" />
-                </div>
+      {/* Main content */}
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="flex flex-col items-center gap-4 animate-fade-up">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading apps...</p>
+            </div>
+          </div>
+        ) : apps.length === 0 ? (
+          // Empty state
+          <div className="flex flex-col items-center justify-center py-20 animate-fade-up">
+            <div className="relative mb-6">
+              <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-xl animate-glow-pulse" />
+              <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 shadow-lg">
+                <Sparkles className="h-12 w-12 text-primary" />
               </div>
-              
-              {/* Hero Text */}
-              <div className="flex flex-col gap-3">
-                <h1 className="text-3xl font-bold tracking-tight text-foreground text-balance md:text-4xl">
-                  Atlas
-                </h1>
-                <p className="text-base text-muted-foreground text-pretty leading-relaxed max-w-md">
-                  Upload your images and describe your vision. Create a
-                  custom, deployable website with a unique domain.
-                </p>
-              </div>
-
-              {/* CTA Button */}
-              <Button
-                size="lg"
-                onClick={handleNewSite}
-                disabled={isCreating}
-                className="h-12 gap-2.5 px-6 text-base font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-5 w-5" />
-                    Create New Site
-                  </>
-                )}
-              </Button>
-
-              {/* Recent sites */}
-              {sites.length > 0 && (
-                <div className="mt-6 w-full animate-fade-up" style={{ animationDelay: '0.1s' }}>
-                  <p className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                    Recent Projects
-                  </p>
-                  <div className="flex flex-col gap-2.5">
-                    {sites.slice(0, 3).map((site, index) => (
-                      <button
-                        key={site.id}
-                        type="button"
-                        onClick={() => router.push(`/site/${site.id}`)}
-                        className={`group flex items-center gap-4 rounded-xl border border-border/50 bg-card/50 p-4 text-left transition-all duration-200 hover:bg-card hover:border-border hover:shadow-lg hover:shadow-primary/5 active:scale-[0.99] stagger-${index + 1}`}
-                        style={{ animationDelay: `${0.15 + index * 0.05}s` }}
-                      >
-                        {site.imageUrls[0] ? (
-                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/50 shadow-sm">
-                            <img
-                              src={site.imageUrls[0]}
-                              alt=""
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted/50 border border-border/50">
-                            <Globe className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div className="flex flex-col gap-1 min-w-0 flex-1">
-                          <span className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                            {site.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground capitalize flex items-center gap-1.5">
-                            {site.status === "complete" && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                            )}
-                            {site.status === "draft" ? "Not started" : site.status}
-                          </span>
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground/50 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance text-center">
+              Build your first app
+            </h1>
+            <p className="mt-3 text-muted-foreground text-pretty text-center max-w-md">
+              Describe what you want to build and watch it come to life. Each app gets its own subdomain and can be iterated through chat.
+            </p>
+            <Button onClick={handleNewApp} disabled={isCreating} size="lg" className="mt-6 gap-2">
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-5 w-5" />
+                  Build an App
+                </>
               )}
+            </Button>
+          </div>
+        ) : (
+          // Apps list
+          <div className="space-y-6 animate-fade-up">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Your Apps</h2>
+              <span className="text-sm text-muted-foreground">{apps.length} app{apps.length !== 1 ? "s" : ""}</span>
+            </div>
+            
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {apps.map((app, index) => (
+                <button
+                  key={app.id}
+                  onClick={() => router.push(`/apps/${app.id}`)}
+                  className="group flex flex-col gap-4 rounded-xl border border-border/50 bg-card/50 p-5 text-left transition-all duration-200 hover:bg-card hover:border-border hover:shadow-lg hover:shadow-primary/5 active:scale-[0.99]"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/15 transition-colors">
+                      <Layers className="h-5 w-5 text-primary" />
+                    </div>
+                    {getStatusBadge(app.status)}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                      {app.name || "Untitled App"}
+                    </h3>
+                    {app.description && (
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                        {app.description}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatDate(app.updatedAt)}
+                    </div>
+                    {app.previewUrl && (
+                      <div className="flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span className="truncate max-w-[120px]">{app.subdomain}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground/50 group-hover:text-primary/70 transition-colors">
+                    <span>Open app</span>
+                    <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   )

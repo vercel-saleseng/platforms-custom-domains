@@ -58,3 +58,56 @@ export interface UploadResponse {
   urls: string[]
 }
 
+// App types for the new chat-first platform
+export type AppStatus =
+  | "created"      // Just created, no messages yet
+  | "building"     // First message sent, workflow in progress
+  | "deployed"     // Initial deployment complete
+  | "iterating"    // Processing iteration message
+  | "error"        // Something went wrong
+
+export interface AppRecord {
+  id: string
+  name?: string
+  description?: string
+  subdomain: string
+  
+  // v0 Integration
+  v0ChatId?: string
+  v0ProjectId?: string
+  v0VersionId?: string
+  
+  // Vercel Integration
+  vercelProjectId?: string
+  vercelTeamId?: string
+  
+  // Deployment State
+  previewUrl?: string
+  customDomain?: string
+  customDomainVerified?: boolean
+  currentDeploymentId?: string
+  
+  // Pending Changes
+  hasPendingChanges: boolean
+  pendingMessageId?: string
+  
+  // Workflow tracking
+  workflowRunId?: string
+  status: AppStatus
+  currentStep: number
+  error?: string
+  
+  // Timestamps
+  createdAt: string
+  updatedAt: string
+}
+
+export const APP_STEP_LABELS: Record<number, string> = {
+  0: "Ready to build",
+  1: "Creating v0 project...",
+  2: "Generating app...",
+  3: "Deploying to Vercel...",
+  4: "Assigning domain...",
+  5: "Complete!",
+}
+
