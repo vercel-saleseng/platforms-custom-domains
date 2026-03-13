@@ -21,7 +21,7 @@ export function AppSidebar({
   onNewSite,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-sidebar border-r border-sidebar-border">
       {/* Header */}
       <div className="flex items-center px-4 py-4 border-b border-sidebar-border/50">
         <Link 
@@ -61,7 +61,7 @@ export function AppSidebar({
       </div>
 
       {/* Site list */}
-      <ScrollArea className="flex-1 px-2 pb-4">
+      <ScrollArea className="flex-1 min-h-0 px-2 pb-4">
         {sites.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-accent/50 mb-4">
